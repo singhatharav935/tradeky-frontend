@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import authFetch from "@/lib/authFetch";
+import { authFetch } from "@/lib/authFetch";
+
 
 export default function TradeOrderPanel({
   onTradeSuccess,
