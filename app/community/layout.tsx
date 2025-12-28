@@ -6,8 +6,8 @@ import { usePathname } from 'next/navigation';
 
 const menu = [
   { name: 'Feed', href: '/community' },
-  { name: 'Chat', href: '/community/chat' },           // 🆕
-  { name: 'Groups', href: '/community/groups' },       // 🆕
+  { name: 'Chat', href: '/community/chat' },
+  { name: 'Groups', href: '/community/groups' },
 
   { divider: true },
 
@@ -30,7 +30,7 @@ export default function CommunityLayout({
   const pathname = usePathname();
 
   return (
-    <div className="min-h-screen bg-black text-white flex">
+    <div className="min-h-screen bg-black flex text-white">
       {/* SIDEBAR */}
       <aside className="w-64 border-r border-zinc-800 p-4 space-y-2">
         <h2 className="text-lg font-semibold mb-4">Community</h2>
@@ -55,7 +55,9 @@ export default function CommunityLayout({
       </aside>
 
       {/* CONTENT */}
-      <main className="flex-1 p-6">{children}</main>
+      <main className="flex-1 p-6 text-gray-100">
+        {children}
+      </main>
     </div>
   );
 }
