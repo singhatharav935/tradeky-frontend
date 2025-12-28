@@ -6,6 +6,7 @@ import {
   CandlestickData,
   LineData,
   ISeriesApi,
+  UTCTimestamp,
 } from 'lightweight-charts';
 
 const TIMEFRAMES = { '1m': 60, '5m': 300, '15m': 900 };
@@ -24,7 +25,6 @@ export default function TradingChart({ onPriceUpdate }: any) {
   const chartRef = useRef<any>(null);
   const candleSeries = useRef<any>(null);
 
-  // 🔒 CREATE ONCE – NEVER REMOVE
   const ema9 = useRef<ISeriesApi<'Line'> | null>(null);
   const ema21 = useRef<ISeriesApi<'Line'> | null>(null);
   const sma50 = useRef<ISeriesApi<'Line'> | null>(null);
@@ -46,7 +46,8 @@ export default function TradingChart({ onPriceUpdate }: any) {
     vwap: false,
   });
 
-  const now = () => Math.floor(Date.now() / 1000);
+  const now = (): UTCTimestamp =>
+    Math.floor(Date.now() / 1000) as UTCTimestamp;
 
   /* ================= CHART INIT ================= */
   useEffect(() => {
@@ -66,7 +67,6 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
     candleSeries.current = chartRef.current.addCandlestickSeries();
 
-    // 🔒 CREATE INDICATORS ONCE
     ema9.current = chartRef.current.addLineSeries({ color: '#22c55e', visible: false });
     ema21.current = chartRef.current.addLineSeries({ color: '#3b82f6', visible: false });
     sma50.current = chartRef.current.addLineSeries({ color: '#f59e0b', visible: false });
@@ -87,37 +87,28 @@ export default function TradingChart({ onPriceUpdate }: any) {
     };
   }, [tf]);
 
-  /* ================= TOGGLE VISIBILITY ================= */
-  useEffect(() => {
-    ema9.current?.applyOptions({ visible: ind.ema9 });
-    ema21.current?.applyOptions({ visible: ind.ema21 });
-    sma50.current?.applyOptions({ visible: ind.sma50 });
-    sma200.current?.applyOptions({ visible: ind.sma200 });
-    bbUpper.current?.applyOptions({ visible: ind.bb });
-    bbLower.current?.applyOptions({ visible: ind.bb });
-    vwap.current?.applyOptions({ visible: ind.vwap });
-  }, [ind]);
-
   /* ================= DATA ================= */
   function initData() {
     candles.current = [];
     volume.current = [];
 
-    let t = now() - TIMEFRAMES[tf] * 60;
+    let tNum = Number(now()) - TIMEFRAMES[tf] * 60;
     let price = 42000;
 
     for (let i = 0; i < 60; i++) {
       const close = price + (Math.random() - 0.5) * 50;
+
       candles.current.push({
-        time: t,
+        time: tNum as UTCTimestamp,
         open: price,
         high: Math.max(price, close) + 20,
         low: Math.min(price, close) - 20,
         close,
       });
+
       volume.current.push(Math.random() * 1000);
       price = close;
-      t += TIMEFRAMES[tf];
+      tNum += TIMEFRAMES[tf];
     }
 
     recalcIndicators();
@@ -125,11 +116,14 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
   function tick() {
     const period = TIMEFRAMES[tf];
-    const t = now();
+    const tNum = Number(now());
     const last = candles.current.at(-1)!;
 
-    const candleStart = Math.floor(last.time / period) * period;
-    const currentStart = Math.floor(t / period) * period;
+    const candleStart =
+      (Math.floor(Number(last.time) / period) * period) as UTCTimestamp;
+    const currentStart =
+      (Math.floor(tNum / period) * period) as UTCTimestamp;
+
     const newPrice = last.close + (Math.random() - 0.5) * 20;
 
     if (currentStart === candleStart) {
@@ -138,7 +132,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
       last.low = Math.min(last.low, newPrice);
       candleSeries.current.update(last);
     } else {
-      const candle = {
+      const candle: CandlestickData = {
         time: currentStart,
         open: last.close,
         high: newPrice,
@@ -156,43 +150,30 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
   /* ================= INDICATORS ================= */
   function recalcIndicators() {
-    const ema9Data = calcEMA(candles.current, 9);
-    const ema21Data = calcEMA(candles.current, 21);
-    const sma50Data = calcSMA(candles.current, 50);
-    const sma200Data = calcSMA(candles.current, 200);
-    const { upper, lower } = calcBB(candles.current, 20);
-    const vwapData = calcVWAP(candles.current, volume.current);
+    ema9.current?.setData(calcEMA(candles.current, 9));
+    ema21.current?.setData(calcEMA(candles.current, 21));
+    sma50.current?.setData(calcSMA(candles.current, 50));
+    sma200.current?.setData(calcSMA(candles.current, 200));
 
-    ema9.current?.setData(ema9Data);
-    ema21.current?.setData(ema21Data);
-    sma50.current?.setData(sma50Data);
-    sma200.current?.setData(sma200Data);
+    const { upper, lower } = calcBB(candles.current, 20);
     bbUpper.current?.setData(upper);
     bbLower.current?.setData(lower);
-    vwap.current?.setData(vwapData);
-  }
 
-  /* ================= UI ================= */
-  function toggle(name: keyof IndicatorsState) {
-    setInd(p => ({ ...p, [name]: !p[name] }));
+    vwap.current?.setData(calcVWAP(candles.current, volume.current));
   }
 
   return (
     <div className="bg-zinc-900 p-2 rounded border border-zinc-800">
       <div className="flex gap-2 mb-2 text-xs">
-        {(['1m','5m','15m'] as const).map(x => (
-          <button key={x} onClick={() => setTf(x)}
-            className={`px-2 py-1 rounded ${tf===x?'bg-yellow-500 text-black':'bg-zinc-800'}`}>
+        {(['1m', '5m', '15m'] as const).map(x => (
+          <button
+            key={x}
+            onClick={() => setTf(x)}
+            className={`px-2 py-1 rounded ${
+              tf === x ? 'bg-yellow-500 text-black' : 'bg-zinc-800'
+            }`}
+          >
             {x}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex gap-2 mb-2 text-xs flex-wrap">
-        {(Object.keys(ind) as (keyof IndicatorsState)[]).map(k => (
-          <button key={k} onClick={() => toggle(k)}
-            className={`px-2 py-1 rounded ${ind[k]?'bg-green-600':'bg-zinc-800'}`}>
-            {k.toUpperCase()}
           </button>
         ))}
       </div>
@@ -223,19 +204,24 @@ function calcSMA(c: CandlestickData[], p: number): LineData[] {
 function calcBB(c: CandlestickData[], p: number) {
   const upper: LineData[] = [];
   const lower: LineData[] = [];
+
   c.forEach((x, i) => {
     if (i < p) return;
     const slice = c.slice(i - p, i);
     const mean = slice.reduce((a, b) => a + b.close, 0) / p;
-    const std = Math.sqrt(slice.reduce((a, b) => a + (b.close - mean) ** 2, 0) / p);
+    const std = Math.sqrt(
+      slice.reduce((a, b) => a + (b.close - mean) ** 2, 0) / p
+    );
     upper.push({ time: x.time, value: mean + 2 * std });
     lower.push({ time: x.time, value: mean - 2 * std });
   });
+
   return { upper, lower };
 }
 
 function calcVWAP(c: CandlestickData[], v: number[]): LineData[] {
-  let pv = 0, tv = 0;
+  let pv = 0;
+  let tv = 0;
   return c.map((x, i) => {
     pv += x.close * v[i];
     tv += v[i];
