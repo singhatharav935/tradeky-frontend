@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import TradingChart from '@/components/TradingChart';
@@ -15,13 +15,21 @@ type Summary = {
   capital: number;
 };
 
+type Position = {
+  id: string;
+  symbol: string;
+  side: 'BUY' | 'SELL';
+  entry: number;
+  qty: number;
+};
+
 export default function DashboardPage() {
   const router = useRouter();
 
   const [userId, setUserId] = useState<string | null>(null);
   const [symbol, setSymbol] = useState<'BTC' | 'NIFTY' | 'BANKNIFTY'>('BTC');
   const [price, setPrice] = useState<number>(0);
-  const [positions, setPositions] = useState<any[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
 
   const [summary, setSummary] = useState<Summary>({
     balance: 0,
@@ -49,21 +57,39 @@ export default function DashboardPage() {
       });
   }, [router]);
 
-  /* ================= ACCOUNT SUMMARY ================= */
+  /* ================= ACCOUNT SUMMARY (BASE) ================= */
   useEffect(() => {
     authFetch('/api/account/summary')
       .then((data: any) => {
         if (!data?.__unauthorized) {
           setSummary({
             balance: data.balance ?? 0,
-            unrealizedPnl: data.unrealizedPnl ?? 0,
+            unrealizedPnl: 0, // will be calculated live
             dailyPnl: data.dailyPnl ?? 0,
-            capital: data.capital ?? 0,
+            capital: data.balance ?? 0,
           });
         }
       })
       .finally(() => setLoadingSummary(false));
   }, []);
+
+  /* ================= LIVE UNREALIZED P&L ================= */
+  const liveUnrealizedPnl = useMemo(() => {
+    if (!price) return 0;
+
+    return positions.reduce((acc, p) => {
+      const diff =
+        p.side === 'BUY'
+          ? price - p.entry
+          : p.entry - price;
+
+      return acc + diff * p.qty;
+    }, 0);
+  }, [positions, price]);
+
+  const liveCapital = useMemo(() => {
+    return summary.balance + liveUnrealizedPnl + summary.dailyPnl;
+  }, [summary.balance, summary.dailyPnl, liveUnrealizedPnl]);
 
   /* ================= TRADE HANDLER ================= */
   function handleTrade(side: 'BUY' | 'SELL') {
@@ -110,19 +136,19 @@ export default function DashboardPage() {
       <div className="grid grid-cols-4 gap-4">
         <Stat
           label="Balance"
-          value={loadingSummary ? '—' : `₹${summary.balance}`}
+          value={loadingSummary ? '—' : `₹${summary.balance.toFixed(2)}`}
         />
         <Stat
-          label="Unrealized P&L"
-          value={loadingSummary ? '—' : `₹${summary.unrealizedPnl}`}
+          label="Unrealized P&L (Live)"
+          value={price ? `₹${liveUnrealizedPnl.toFixed(2)}` : '—'}
         />
         <Stat
           label="Daily P&L"
-          value={loadingSummary ? '—' : `₹${summary.dailyPnl}`}
+          value={loadingSummary ? '—' : `₹${summary.dailyPnl.toFixed(2)}`}
         />
         <Stat
-          label="Capital"
-          value={loadingSummary ? '—' : `₹${summary.capital}`}
+          label="Capital (Live)"
+          value={price ? `₹${liveCapital.toFixed(2)}` : '—'}
         />
       </div>
 
