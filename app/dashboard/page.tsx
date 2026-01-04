@@ -57,8 +57,9 @@ export default function DashboardPage() {
       });
   }, [router]);
 
-  /* ================= ACCOUNT SUMMARY (BASE) ================= */
-  useEffect(() => {
+  /* ================= ACCOUNT SUMMARY (FETCH) ================= */
+  const fetchAccountSummary = () => {
+    setLoadingSummary(true);
     authFetch('/api/account/summary')
       .then((data: any) => {
         if (!data?.__unauthorized) {
@@ -71,7 +72,19 @@ export default function DashboardPage() {
         }
       })
       .finally(() => setLoadingSummary(false));
+  };
+
+  // ⬅️ INITIAL LOAD
+  useEffect(() => {
+    fetchAccountSummary();
   }, []);
+
+  // ⬅️ 🔥 KEY FIX: REFETCH AFTER TRADES / CLOSE
+  useEffect(() => {
+    if (positions.length > 0) {
+      fetchAccountSummary();
+    }
+  }, [positions]);
 
   /* ================= LIVE UNREALIZED P&L ================= */
   const liveUnrealizedPnl = useMemo(() => {
@@ -119,9 +132,7 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* 🔽 ONLY CHANGE IS HERE */}
         <div className="flex items-center gap-3">
-          {/* COMMUNITY BUTTON */}
           <button
             onClick={() => router.push('/community')}
             className="px-3 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700"
@@ -129,7 +140,6 @@ export default function DashboardPage() {
             Community
           </button>
 
-          {/* SYMBOL SELECT */}
           <select
             value={symbol}
             onChange={e =>
@@ -183,7 +193,6 @@ export default function DashboardPage() {
   );
 }
 
-/* ================= STAT CARD ================= */
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-zinc-900 border border-zinc-700 rounded p-4">
