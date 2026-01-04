@@ -1,5 +1,7 @@
 'use client';
 
+import { authFetch } from '@/lib/authFetch';
+
 type Position = {
   id: string;
   symbol: string;
@@ -22,6 +24,22 @@ export default function OrdersTable({ positions, livePrice, onClose }: Props) {
         : p.entry - livePrice;
 
     return diff * p.qty;
+  }
+
+  async function handleClose(p: Position) {
+    // 🔥 CREATE SELL TRADE IN BACKEND
+    await authFetch('/api/trades', {
+      method: 'POST',
+      body: JSON.stringify({
+        symbol: p.symbol,
+        side: 'SELL',
+        price: livePrice,
+        quantity: p.qty,
+      }),
+    });
+
+    // 🔥 THEN REMOVE FROM UI
+    onClose(p.id);
   }
 
   if (positions.length === 0) {
@@ -74,7 +92,7 @@ export default function OrdersTable({ positions, livePrice, onClose }: Props) {
                 </td>
                 <td className="px-4 py-2">
                   <button
-                    onClick={() => onClose(p.id)}
+                    onClick={() => handleClose(p)}
                     className="text-xs bg-zinc-800 px-2 py-1 rounded"
                   >
                     CLOSE
