@@ -64,7 +64,7 @@ export default function DashboardPage() {
         if (!data?.__unauthorized) {
           setSummary({
             balance: data.balance ?? 0,
-            unrealizedPnl: 0, // will be calculated live
+            unrealizedPnl: 0,
             dailyPnl: data.dailyPnl ?? 0,
             capital: data.balance ?? 0,
           });
@@ -119,17 +119,29 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <select
-          value={symbol}
-          onChange={e =>
-            setSymbol(e.target.value as 'BTC' | 'NIFTY' | 'BANKNIFTY')
-          }
-          className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm"
-        >
-          <option value="BTC">BTC</option>
-          <option value="NIFTY">NIFTY</option>
-          <option value="BANKNIFTY">BANKNIFTY</option>
-        </select>
+        {/* 🔽 ONLY CHANGE IS HERE */}
+        <div className="flex items-center gap-3">
+          {/* COMMUNITY BUTTON */}
+          <button
+            onClick={() => router.push('/community')}
+            className="px-3 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700"
+          >
+            Community
+          </button>
+
+          {/* SYMBOL SELECT */}
+          <select
+            value={symbol}
+            onChange={e =>
+              setSymbol(e.target.value as 'BTC' | 'NIFTY' | 'BANKNIFTY')
+            }
+            className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm"
+          >
+            <option value="BTC">BTC</option>
+            <option value="NIFTY">NIFTY</option>
+            <option value="BANKNIFTY">BANKNIFTY</option>
+          </select>
+        </div>
       </div>
 
       {/* ===== MONEY / P&L SECTION ===== */}
@@ -152,17 +164,14 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* ===== CHART ===== */}
       <TradingChart onPriceUpdate={setPrice} />
 
-      {/* ===== TRADE PANEL ===== */}
       <TradePanel
         symbol={symbol}
         livePrice={price}
         onTrade={handleTrade}
       />
 
-      {/* ===== ORDERS ===== */}
       <OrdersTable
         positions={positions}
         livePrice={price}
