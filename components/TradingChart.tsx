@@ -20,7 +20,6 @@ export default function TradingChart({ onPriceUpdate }: any) {
   const candleSeries = useRef<any>(null);
 
   const indicatorSeries = useRef<Record<string, ISeriesApi<'Line'>>>({});
-
   const candles = useRef<CandlestickData[]>([]);
   const volume = useRef<number[]>([]);
 
@@ -44,7 +43,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
     sma100: false,
     sma200: false,
 
-    // Core
+    // Core (RSI / MACD kept for future pane)
     vwap: false,
     bb: false,
     rsi: false,
@@ -105,6 +104,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
       price = close;
       t += TIMEFRAMES[tf];
     }
+
     recalcIndicators();
   }
 
@@ -139,7 +139,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
     Object.entries(ind).forEach(([key, enabled]) => {
       if (!enabled) {
         hideSeries(key);
-        hideSeries(key + '_2');
+        hideSeries(key + '_lower');
         return;
       }
 
@@ -160,16 +160,10 @@ export default function TradingChart({ onPriceUpdate }: any) {
       if (key === 'bb') {
         const { upper, lower } = calcBB(candles.current, 20);
         getSeries('bb', '#a855f7').setData(upper);
-        getSeries('bb_2', '#a855f7').setData(lower);
+        getSeries('bb_lower', '#a855f7').setData(lower);
       }
 
-      if (key === 'rsi') {
-        getSeries(key, '#3b82f6').setData(calcRSI(candles.current, 14));
-      }
-
-      if (key === 'macd') {
-        getSeries(key, '#ef4444').setData(calcMACD(candles.current));
-      }
+      // RSI & MACD intentionally kept but NOT drawn yet
     });
   }
 
@@ -208,9 +202,13 @@ export default function TradingChart({ onPriceUpdate }: any) {
               <input
                 type="checkbox"
                 checked={ind[k]}
-                onChange={() =>
-                  setInd(s => ({ ...s, [k]: !s[k] }))
-                }
+                onChange={() => {
+                  setInd(s => {
+                    const next = { ...s, [k]: !s[k] };
+                    setTimeout(recalcIndicators, 0);
+                    return next;
+                  });
+                }}
               />
               <span>{k.toUpperCase()}</span>
             </label>
@@ -242,6 +240,7 @@ function calcSMA(c: CandlestickData[], p: number): LineData[] {
 function calcBB(c: CandlestickData[], p: number) {
   const upper: LineData[] = [];
   const lower: LineData[] = [];
+
   c.forEach((x, i) => {
     if (i < p) return;
     const slice = c.slice(i - p, i);
@@ -252,6 +251,7 @@ function calcBB(c: CandlestickData[], p: number) {
     upper.push({ time: x.time, value: mean + 2 * std });
     lower.push({ time: x.time, value: mean - 2 * std });
   });
+
   return { upper, lower };
 }
 
@@ -263,26 +263,4 @@ function calcVWAP(c: CandlestickData[], v: number[]): LineData[] {
     tv += v[i];
     return { time: x.time, value: pv / tv };
   });
-}
-
-function calcRSI(c: CandlestickData[], p: number): LineData[] {
-  let gains = 0,
-    losses = 0;
-  return c.map((x, i) => {
-    if (i === 0) return { time: x.time, value: 50 };
-    const diff = x.close - c[i - 1].close;
-    gains += diff > 0 ? diff : 0;
-    losses += diff < 0 ? -diff : 0;
-    const rs = gains / (losses || 1);
-    return { time: x.time, value: 100 - 100 / (1 + rs) };
-  });
-}
-
-function calcMACD(c: CandlestickData[]): LineData[] {
-  const fast = calcEMA(c, 12);
-  const slow = calcEMA(c, 26);
-  return fast.map((x, i) => ({
-    time: x.time,
-    value: x.value - (slow[i]?.value || 0),
-  }));
 }
