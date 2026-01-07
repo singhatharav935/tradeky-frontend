@@ -57,7 +57,7 @@ export default function DashboardPage() {
       });
   }, [router]);
 
-  /* ================= ACCOUNT SUMMARY (FETCH) ================= */
+  /* ================= ACCOUNT SUMMARY ================= */
   const fetchAccountSummary = () => {
     setLoadingSummary(true);
     authFetch('/api/account/summary')
@@ -67,24 +67,16 @@ export default function DashboardPage() {
             balance: data.balance ?? 0,
             unrealizedPnl: 0,
             dailyPnl: data.dailyPnl ?? 0,
-            capital: data.balance ?? 0,
+            capital: data.capital ?? 0,
           });
         }
       })
       .finally(() => setLoadingSummary(false));
   };
 
-  // ⬅️ INITIAL LOAD
   useEffect(() => {
     fetchAccountSummary();
   }, []);
-
-  // ⬅️ 🔥 KEY FIX: REFETCH AFTER TRADES / CLOSE
-  useEffect(() => {
-    if (positions.length > 0) {
-      fetchAccountSummary();
-    }
-  }, [positions]);
 
   /* ================= LIVE UNREALIZED P&L ================= */
   const liveUnrealizedPnl = useMemo(() => {
@@ -101,13 +93,30 @@ export default function DashboardPage() {
   }, [positions, price]);
 
   const liveCapital = useMemo(() => {
-    return summary.balance + liveUnrealizedPnl + summary.dailyPnl;
+    return summary.balance + summary.dailyPnl + liveUnrealizedPnl;
   }, [summary.balance, summary.dailyPnl, liveUnrealizedPnl]);
 
-  /* ================= TRADE HANDLER ================= */
-  function handleTrade(side: 'BUY' | 'SELL') {
+  /* ================= TRADE HANDLER (🔥 REAL FIX) ================= */
+  async function handleTrade(side: 'BUY' | 'SELL') {
     if (!price) return;
 
+    // 1️⃣ SEND TRADE TO BACKEND
+    const res = await authFetch('/api/trades', {
+      method: 'POST',
+      body: JSON.stringify({
+        symbol,
+        side,
+        price,
+        quantity: 1,
+      }),
+    });
+
+    if (res?.error) {
+      alert(res.error);
+      return;
+    }
+
+    // 2️⃣ UPDATE UI POSITIONS
     setPositions(p => [
       ...p,
       {
@@ -118,6 +127,9 @@ export default function DashboardPage() {
         qty: 1,
       },
     ]);
+
+    // 3️⃣ REFRESH ACCOUNT SUMMARY (🔥 CAPITAL MOVES NOW)
+    fetchAccountSummary();
   }
 
   return (
@@ -154,24 +166,12 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ===== MONEY / P&L SECTION ===== */}
+      {/* ===== MONEY / P&L ===== */}
       <div className="grid grid-cols-4 gap-4">
-        <Stat
-          label="Balance"
-          value={loadingSummary ? '—' : `₹${summary.balance.toFixed(2)}`}
-        />
-        <Stat
-          label="Unrealized P&L (Live)"
-          value={price ? `₹${liveUnrealizedPnl.toFixed(2)}` : '—'}
-        />
-        <Stat
-          label="Daily P&L"
-          value={loadingSummary ? '—' : `₹${summary.dailyPnl.toFixed(2)}`}
-        />
-        <Stat
-          label="Capital (Live)"
-          value={price ? `₹${liveCapital.toFixed(2)}` : '—'}
-        />
+        <Stat label="Balance" value={loadingSummary ? '—' : `₹${summary.balance.toFixed(2)}`} />
+        <Stat label="Unrealized P&L (Live)" value={price ? `₹${liveUnrealizedPnl.toFixed(2)}` : '—'} />
+        <Stat label="Daily P&L" value={loadingSummary ? '—' : `₹${summary.dailyPnl.toFixed(2)}`} />
+        <Stat label="Capital (Live)" value={price ? `₹${liveCapital.toFixed(2)}` : '—'} />
       </div>
 
       <TradingChart onPriceUpdate={setPrice} />
