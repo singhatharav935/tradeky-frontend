@@ -9,41 +9,38 @@ import {
   UTCTimestamp,
 } from 'lightweight-charts';
 
+/* ================= CONFIG ================= */
 const TIMEFRAMES = { '1m': 60, '5m': 300, '15m': 900 };
 
-type IndicatorsState = {
-  ema9: boolean;
-  ema21: boolean;
-  sma50: boolean;
-  sma200: boolean;
-  bb: boolean;
-  vwap: boolean;
-};
+type IndicatorMap = Record<string, boolean>;
 
 export default function TradingChart({ onPriceUpdate }: any) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<any>(null);
   const candleSeries = useRef<any>(null);
 
-  const ema9 = useRef<ISeriesApi<'Line'> | null>(null);
-  const ema21 = useRef<ISeriesApi<'Line'> | null>(null);
-  const sma50 = useRef<ISeriesApi<'Line'> | null>(null);
-  const sma200 = useRef<ISeriesApi<'Line'> | null>(null);
-  const bbUpper = useRef<ISeriesApi<'Line'> | null>(null);
-  const bbLower = useRef<ISeriesApi<'Line'> | null>(null);
-  const vwap = useRef<ISeriesApi<'Line'> | null>(null);
+  const indicatorSeries = useRef<Record<string, ISeriesApi<'Line'>>>({});
 
   const candles = useRef<CandlestickData[]>([]);
   const volume = useRef<number[]>([]);
 
   const [tf, setTf] = useState<'1m' | '5m' | '15m'>('1m');
-  const [ind, setInd] = useState<IndicatorsState>({
-    ema9: false,
-    ema21: false,
-    sma50: false,
-    sma200: false,
-    bb: false,
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const [ind, setInd] = useState<IndicatorMap>({
+    // EMA
+    ema5: false, ema9: false, ema13: false, ema21: false,
+    ema50: false, ema100: false, ema200: false,
+
+    // SMA
+    sma10: false, sma20: false, sma50: false,
+    sma100: false, sma200: false,
+
+    // Core
     vwap: false,
+    rsi: false,
+    macd: false,
+    bb: false,
   });
 
   const now = (): UTCTimestamp =>
@@ -62,25 +59,15 @@ export default function TradingChart({ onPriceUpdate }: any) {
         horzLines: { color: '#1f2937' },
       },
       timeScale: { timeVisible: true, secondsVisible: tf === '1m' },
-      rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.25 } },
     });
 
     candleSeries.current = chartRef.current.addCandlestickSeries();
-
-    ema9.current = chartRef.current.addLineSeries({ color: '#22c55e', visible: false });
-    ema21.current = chartRef.current.addLineSeries({ color: '#3b82f6', visible: false });
-    sma50.current = chartRef.current.addLineSeries({ color: '#f59e0b', visible: false });
-    sma200.current = chartRef.current.addLineSeries({ color: '#ef4444', visible: false });
-    bbUpper.current = chartRef.current.addLineSeries({ color: '#a855f7', visible: false });
-    bbLower.current = chartRef.current.addLineSeries({ color: '#a855f7', visible: false });
-    vwap.current = chartRef.current.addLineSeries({ color: '#14b8a6', visible: false });
 
     initData();
     candleSeries.current.setData(candles.current);
     chartRef.current.timeScale().fitContent();
 
     const interval = setInterval(tick, 1000);
-
     return () => {
       clearInterval(interval);
       chartRef.current.remove();
@@ -92,93 +79,117 @@ export default function TradingChart({ onPriceUpdate }: any) {
     candles.current = [];
     volume.current = [];
 
-    let tNum = Number(now()) - TIMEFRAMES[tf] * 60;
+    let t = Number(now()) - TIMEFRAMES[tf] * 60;
     let price = 42000;
 
     for (let i = 0; i < 60; i++) {
       const close = price + (Math.random() - 0.5) * 50;
-
       candles.current.push({
-        time: tNum as UTCTimestamp,
+        time: t as UTCTimestamp,
         open: price,
         high: Math.max(price, close) + 20,
         low: Math.min(price, close) - 20,
         close,
       });
-
       volume.current.push(Math.random() * 1000);
       price = close;
-      tNum += TIMEFRAMES[tf];
+      t += TIMEFRAMES[tf];
     }
-
     recalcIndicators();
   }
 
   function tick() {
-    const period = TIMEFRAMES[tf];
-    const tNum = Number(now());
     const last = candles.current.at(-1)!;
-
-    const candleStart =
-      (Math.floor(Number(last.time) / period) * period) as UTCTimestamp;
-    const currentStart =
-      (Math.floor(tNum / period) * period) as UTCTimestamp;
-
     const newPrice = last.close + (Math.random() - 0.5) * 20;
 
-    if (currentStart === candleStart) {
-      last.close = newPrice;
-      last.high = Math.max(last.high, newPrice);
-      last.low = Math.min(last.low, newPrice);
-      candleSeries.current.update(last);
-    } else {
-      const candle: CandlestickData = {
-        time: currentStart,
-        open: last.close,
-        high: newPrice,
-        low: newPrice,
-        close: newPrice,
-      };
-      candles.current.push(candle);
-      volume.current.push(Math.random() * 1000);
-      candleSeries.current.update(candle);
-    }
+    last.close = newPrice;
+    last.high = Math.max(last.high, newPrice);
+    last.low = Math.min(last.low, newPrice);
+    candleSeries.current.update(last);
 
     recalcIndicators();
     onPriceUpdate?.(newPrice);
   }
 
   /* ================= INDICATORS ================= */
+  function getSeries(key: string, color: string) {
+    if (!indicatorSeries.current[key]) {
+      indicatorSeries.current[key] =
+        chartRef.current.addLineSeries({ color });
+    }
+    return indicatorSeries.current[key];
+  }
+
   function recalcIndicators() {
-    ema9.current?.setData(calcEMA(candles.current, 9));
-    ema21.current?.setData(calcEMA(candles.current, 21));
-    sma50.current?.setData(calcSMA(candles.current, 50));
-    sma200.current?.setData(calcSMA(candles.current, 200));
+    Object.entries(ind).forEach(([key, enabled]) => {
+      if (!enabled) return;
 
-    const { upper, lower } = calcBB(candles.current, 20);
-    bbUpper.current?.setData(upper);
-    bbLower.current?.setData(lower);
+      if (key.startsWith('ema')) {
+        const p = Number(key.replace('ema', ''));
+        getSeries(key, '#22c55e').setData(calcEMA(candles.current, p));
+      }
 
-    vwap.current?.setData(calcVWAP(candles.current, volume.current));
+      if (key.startsWith('sma')) {
+        const p = Number(key.replace('sma', ''));
+        getSeries(key, '#f59e0b').setData(calcSMA(candles.current, p));
+      }
+
+      if (key === 'vwap') {
+        getSeries(key, '#14b8a6').setData(calcVWAP(candles.current, volume.current));
+      }
+
+      if (key === 'bb') {
+        const { upper, lower } = calcBB(candles.current, 20);
+        getSeries('bbUpper', '#a855f7').setData(upper);
+        getSeries('bbLower', '#a855f7').setData(lower);
+      }
+
+      if (key === 'rsi') {
+        getSeries('rsi', '#3b82f6').setData(calcRSI(candles.current, 14));
+      }
+
+      if (key === 'macd') {
+        getSeries('macd', '#ef4444').setData(calcMACD(candles.current));
+      }
+    });
   }
 
   return (
-    <div className="bg-zinc-900 p-2 rounded border border-zinc-800">
+    <div className="relative bg-zinc-900 p-2 rounded border border-zinc-800">
+      {/* TOP BAR */}
       <div className="flex gap-2 mb-2 text-xs">
         {(['1m', '5m', '15m'] as const).map(x => (
-          <button
-            key={x}
-            onClick={() => setTf(x)}
-            className={`px-2 py-1 rounded ${
-              tf === x ? 'bg-yellow-500 text-black' : 'bg-zinc-800'
-            }`}
-          >
+          <button key={x} onClick={() => setTf(x)}
+            className={`px-2 py-1 rounded ${tf === x ? 'bg-yellow-500 text-black' : 'bg-zinc-800'}`}>
             {x}
           </button>
         ))}
+        <button
+          onClick={() => setDrawerOpen(!drawerOpen)}
+          className="ml-auto px-2 py-1 bg-zinc-800 rounded"
+        >
+          Indicators
+        </button>
       </div>
 
       <div ref={containerRef} className="w-full h-[420px]" />
+
+      {/* DRAWER */}
+      {drawerOpen && (
+        <div className="absolute top-0 right-0 w-64 h-full bg-black border-l border-zinc-700 p-3 overflow-y-auto text-sm">
+          <h3 className="font-semibold mb-2">Indicators</h3>
+          {Object.keys(ind).map(k => (
+            <label key={k} className="flex items-center gap-2 mb-1">
+              <input
+                type="checkbox"
+                checked={ind[k]}
+                onChange={() => setInd(s => ({ ...s, [k]: !s[k] }))}
+              />
+              {k.toUpperCase()}
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -204,27 +215,43 @@ function calcSMA(c: CandlestickData[], p: number): LineData[] {
 function calcBB(c: CandlestickData[], p: number) {
   const upper: LineData[] = [];
   const lower: LineData[] = [];
-
   c.forEach((x, i) => {
     if (i < p) return;
     const slice = c.slice(i - p, i);
     const mean = slice.reduce((a, b) => a + b.close, 0) / p;
-    const std = Math.sqrt(
-      slice.reduce((a, b) => a + (b.close - mean) ** 2, 0) / p
-    );
+    const std = Math.sqrt(slice.reduce((a, b) => a + (b.close - mean) ** 2, 0) / p);
     upper.push({ time: x.time, value: mean + 2 * std });
     lower.push({ time: x.time, value: mean - 2 * std });
   });
-
   return { upper, lower };
 }
 
 function calcVWAP(c: CandlestickData[], v: number[]): LineData[] {
-  let pv = 0;
-  let tv = 0;
+  let pv = 0, tv = 0;
   return c.map((x, i) => {
     pv += x.close * v[i];
     tv += v[i];
     return { time: x.time, value: pv / tv };
   });
+}
+
+function calcRSI(c: CandlestickData[], p: number): LineData[] {
+  let gains = 0, losses = 0;
+  return c.map((x, i) => {
+    if (i === 0) return { time: x.time, value: 50 };
+    const diff = x.close - c[i - 1].close;
+    gains += diff > 0 ? diff : 0;
+    losses += diff < 0 ? -diff : 0;
+    const rs = gains / (losses || 1);
+    return { time: x.time, value: 100 - 100 / (1 + rs) };
+  });
+}
+
+function calcMACD(c: CandlestickData[]): LineData[] {
+  const fast = calcEMA(c, 12);
+  const slow = calcEMA(c, 26);
+  return fast.map((x, i) => ({
+    time: x.time,
+    value: x.value - (slow[i]?.value || 0),
+  }));
 }
