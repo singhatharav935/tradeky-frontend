@@ -29,18 +29,26 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
   const [ind, setInd] = useState<IndicatorMap>({
     // EMA
-    ema5: false, ema9: false, ema13: false, ema21: false,
-    ema50: false, ema100: false, ema200: false,
+    ema5: false,
+    ema9: false,
+    ema13: false,
+    ema21: false,
+    ema50: false,
+    ema100: false,
+    ema200: false,
 
     // SMA
-    sma10: false, sma20: false, sma50: false,
-    sma100: false, sma200: false,
+    sma10: false,
+    sma20: false,
+    sma50: false,
+    sma100: false,
+    sma200: false,
 
     // Core
     vwap: false,
+    bb: false,
     rsi: false,
     macd: false,
-    bb: false,
   });
 
   const now = (): UTCTimestamp =>
@@ -59,6 +67,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
         horzLines: { color: '#1f2937' },
       },
       timeScale: { timeVisible: true, secondsVisible: tf === '1m' },
+      rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.25 } },
     });
 
     candleSeries.current = chartRef.current.addCandlestickSeries();
@@ -71,6 +80,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
     return () => {
       clearInterval(interval);
       chartRef.current.remove();
+      indicatorSeries.current = {};
     };
   }, [tf]);
 
@@ -120,9 +130,18 @@ export default function TradingChart({ onPriceUpdate }: any) {
     return indicatorSeries.current[key];
   }
 
+  function hideSeries(key: string) {
+    const s = indicatorSeries.current[key];
+    if (s) s.setData([]);
+  }
+
   function recalcIndicators() {
     Object.entries(ind).forEach(([key, enabled]) => {
-      if (!enabled) return;
+      if (!enabled) {
+        hideSeries(key);
+        hideSeries(key + '_2');
+        return;
+      }
 
       if (key.startsWith('ema')) {
         const p = Number(key.replace('ema', ''));
@@ -140,16 +159,16 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
       if (key === 'bb') {
         const { upper, lower } = calcBB(candles.current, 20);
-        getSeries('bbUpper', '#a855f7').setData(upper);
-        getSeries('bbLower', '#a855f7').setData(lower);
+        getSeries('bb', '#a855f7').setData(upper);
+        getSeries('bb_2', '#a855f7').setData(lower);
       }
 
       if (key === 'rsi') {
-        getSeries('rsi', '#3b82f6').setData(calcRSI(candles.current, 14));
+        getSeries(key, '#3b82f6').setData(calcRSI(candles.current, 14));
       }
 
       if (key === 'macd') {
-        getSeries('macd', '#ef4444').setData(calcMACD(candles.current));
+        getSeries(key, '#ef4444').setData(calcMACD(candles.current));
       }
     });
   }
@@ -159,14 +178,20 @@ export default function TradingChart({ onPriceUpdate }: any) {
       {/* TOP BAR */}
       <div className="flex gap-2 mb-2 text-xs">
         {(['1m', '5m', '15m'] as const).map(x => (
-          <button key={x} onClick={() => setTf(x)}
-            className={`px-2 py-1 rounded ${tf === x ? 'bg-yellow-500 text-black' : 'bg-zinc-800'}`}>
+          <button
+            key={x}
+            onClick={() => setTf(x)}
+            className={`px-2 py-1 rounded ${
+              tf === x ? 'bg-yellow-500 text-black' : 'bg-zinc-800'
+            }`}
+          >
             {x}
           </button>
         ))}
+
         <button
-          onClick={() => setDrawerOpen(!drawerOpen)}
-          className="ml-auto px-2 py-1 bg-zinc-800 rounded"
+          onClick={() => setDrawerOpen(v => !v)}
+          className="ml-auto px-3 py-1 bg-zinc-800 rounded hover:bg-zinc-700"
         >
           Indicators
         </button>
@@ -176,16 +201,18 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
       {/* DRAWER */}
       {drawerOpen && (
-        <div className="absolute top-0 right-0 w-64 h-full bg-black border-l border-zinc-700 p-3 overflow-y-auto text-sm">
-          <h3 className="font-semibold mb-2">Indicators</h3>
+        <div className="absolute top-0 right-0 h-full w-64 bg-black border-l border-zinc-700 p-3 overflow-y-auto text-sm z-50">
+          <h3 className="font-semibold mb-3">Indicators</h3>
           {Object.keys(ind).map(k => (
-            <label key={k} className="flex items-center gap-2 mb-1">
+            <label key={k} className="flex items-center gap-2 mb-2">
               <input
                 type="checkbox"
                 checked={ind[k]}
-                onChange={() => setInd(s => ({ ...s, [k]: !s[k] }))}
+                onChange={() =>
+                  setInd(s => ({ ...s, [k]: !s[k] }))
+                }
               />
-              {k.toUpperCase()}
+              <span>{k.toUpperCase()}</span>
             </label>
           ))}
         </div>
@@ -219,7 +246,9 @@ function calcBB(c: CandlestickData[], p: number) {
     if (i < p) return;
     const slice = c.slice(i - p, i);
     const mean = slice.reduce((a, b) => a + b.close, 0) / p;
-    const std = Math.sqrt(slice.reduce((a, b) => a + (b.close - mean) ** 2, 0) / p);
+    const std = Math.sqrt(
+      slice.reduce((a, b) => a + (b.close - mean) ** 2, 0) / p
+    );
     upper.push({ time: x.time, value: mean + 2 * std });
     lower.push({ time: x.time, value: mean - 2 * std });
   });
@@ -227,7 +256,8 @@ function calcBB(c: CandlestickData[], p: number) {
 }
 
 function calcVWAP(c: CandlestickData[], v: number[]): LineData[] {
-  let pv = 0, tv = 0;
+  let pv = 0,
+    tv = 0;
   return c.map((x, i) => {
     pv += x.close * v[i];
     tv += v[i];
@@ -236,7 +266,8 @@ function calcVWAP(c: CandlestickData[], v: number[]): LineData[] {
 }
 
 function calcRSI(c: CandlestickData[], p: number): LineData[] {
-  let gains = 0, losses = 0;
+  let gains = 0,
+    losses = 0;
   return c.map((x, i) => {
     if (i === 0) return { time: x.time, value: 50 };
     const diff = x.close - c[i - 1].close;
