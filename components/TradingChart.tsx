@@ -43,7 +43,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
     sma100: false,
     sma200: false,
 
-    // Core (RSI / MACD kept for future pane)
+    // Core
     vwap: false,
     bb: false,
     rsi: false,
@@ -104,8 +104,6 @@ export default function TradingChart({ onPriceUpdate }: any) {
       price = close;
       t += TIMEFRAMES[tf];
     }
-
-    recalcIndicators();
   }
 
   function tick() {
@@ -125,47 +123,55 @@ export default function TradingChart({ onPriceUpdate }: any) {
   function getSeries(key: string, color: string) {
     if (!indicatorSeries.current[key]) {
       indicatorSeries.current[key] =
-        chartRef.current.addLineSeries({ color });
+        chartRef.current.addLineSeries({ color, visible: true });
     }
     return indicatorSeries.current[key];
   }
 
-  function hideSeries(key: string) {
+  function setVisible(key: string, visible: boolean) {
     const s = indicatorSeries.current[key];
-    if (s) s.setData([]);
+    if (s) s.applyOptions({ visible });
   }
 
   function recalcIndicators() {
     Object.entries(ind).forEach(([key, enabled]) => {
-      if (!enabled) {
-        hideSeries(key);
-        hideSeries(key + '_lower');
-        return;
-      }
-
       if (key.startsWith('ema')) {
         const p = Number(key.replace('ema', ''));
-        getSeries(key, '#22c55e').setData(calcEMA(candles.current, p));
+        const s = getSeries(key, '#22c55e');
+        s.setData(calcEMA(candles.current, p));
+        setVisible(key, enabled);
       }
 
       if (key.startsWith('sma')) {
         const p = Number(key.replace('sma', ''));
-        getSeries(key, '#f59e0b').setData(calcSMA(candles.current, p));
+        const s = getSeries(key, '#f59e0b');
+        s.setData(calcSMA(candles.current, p));
+        setVisible(key, enabled);
       }
 
       if (key === 'vwap') {
-        getSeries(key, '#14b8a6').setData(calcVWAP(candles.current, volume.current));
+        const s = getSeries(key, '#14b8a6');
+        s.setData(calcVWAP(candles.current, volume.current));
+        setVisible(key, enabled);
       }
 
       if (key === 'bb') {
         const { upper, lower } = calcBB(candles.current, 20);
-        getSeries('bb', '#a855f7').setData(upper);
-        getSeries('bb_lower', '#a855f7').setData(lower);
+        const u = getSeries('bb_upper', '#a855f7');
+        const l = getSeries('bb_lower', '#a855f7');
+        u.setData(upper);
+        l.setData(lower);
+        setVisible('bb_upper', enabled);
+        setVisible('bb_lower', enabled);
       }
-
-      // RSI & MACD intentionally kept but NOT drawn yet
     });
   }
+
+  /* 🔥 REACT STATE → CHART SYNC (CRITICAL FIX) */
+  useEffect(() => {
+    if (!chartRef.current) return;
+    recalcIndicators();
+  }, [ind]);
 
   return (
     <div className="relative bg-zinc-900 p-2 rounded border border-zinc-800">
@@ -202,13 +208,9 @@ export default function TradingChart({ onPriceUpdate }: any) {
               <input
                 type="checkbox"
                 checked={ind[k]}
-                onChange={() => {
-                  setInd(s => {
-                    const next = { ...s, [k]: !s[k] };
-                    setTimeout(recalcIndicators, 0);
-                    return next;
-                  });
-                }}
+                onChange={() =>
+                  setInd(s => ({ ...s, [k]: !s[k] }))
+                }
               />
               <span>{k.toUpperCase()}</span>
             </label>
@@ -240,7 +242,6 @@ function calcSMA(c: CandlestickData[], p: number): LineData[] {
 function calcBB(c: CandlestickData[], p: number) {
   const upper: LineData[] = [];
   const lower: LineData[] = [];
-
   c.forEach((x, i) => {
     if (i < p) return;
     const slice = c.slice(i - p, i);
@@ -251,13 +252,11 @@ function calcBB(c: CandlestickData[], p: number) {
     upper.push({ time: x.time, value: mean + 2 * std });
     lower.push({ time: x.time, value: mean - 2 * std });
   });
-
   return { upper, lower };
 }
 
 function calcVWAP(c: CandlestickData[], v: number[]): LineData[] {
-  let pv = 0,
-    tv = 0;
+  let pv = 0, tv = 0;
   return c.map((x, i) => {
     pv += x.close * v[i];
     tv += v[i];
