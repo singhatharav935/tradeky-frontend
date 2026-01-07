@@ -96,11 +96,10 @@ export default function DashboardPage() {
     return summary.balance + summary.dailyPnl + liveUnrealizedPnl;
   }, [summary.balance, summary.dailyPnl, liveUnrealizedPnl]);
 
-  /* ================= TRADE HANDLER (🔥 REAL FIX) ================= */
+  /* ================= TRADE HANDLER ================= */
   async function handleTrade(side: 'BUY' | 'SELL') {
     if (!price) return;
 
-    // 1️⃣ SEND TRADE TO BACKEND
     const res = await authFetch('/api/trades', {
       method: 'POST',
       body: JSON.stringify({
@@ -116,7 +115,6 @@ export default function DashboardPage() {
       return;
     }
 
-    // 2️⃣ UPDATE UI POSITIONS
     setPositions(p => [
       ...p,
       {
@@ -128,7 +126,6 @@ export default function DashboardPage() {
       },
     ]);
 
-    // 3️⃣ REFRESH ACCOUNT SUMMARY (🔥 CAPITAL MOVES NOW)
     fetchAccountSummary();
   }
 
@@ -144,12 +141,21 @@ export default function DashboardPage() {
           </p>
         </div>
 
+        {/* 🔹 BUTTONS */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/community')}
             className="px-3 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700"
           >
             Community
+          </button>
+
+          {/* ✅ NEW CONTEST BUTTON */}
+          <button
+            onClick={() => router.push('/contest')}
+            className="px-3 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700"
+          >
+            Contest
           </button>
 
           <select
