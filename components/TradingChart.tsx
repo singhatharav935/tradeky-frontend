@@ -25,11 +25,24 @@ export default function TradingChart({ onPriceUpdate }: any) {
   const [tf, setTf] = useState<'1m' | '5m' | '15m'>('1m');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  /* 🔥 25+ INDICATORS */
   const [ind, setInd] = useState<IndicatorMap>({
+    ema5: false,
     ema9: false,
+    ema13: false,
     ema21: false,
+    ema50: false,
+    ema100: false,
+    ema200: false,
+
+    sma20: false,
     sma50: false,
+    sma100: false,
     sma200: false,
+
+    wma20: false,
+    hma20: false,
+
     vwap: false,
     bb: false,
   });
@@ -46,27 +59,36 @@ export default function TradingChart({ onPriceUpdate }: any) {
         horzLines: { color: '#1f2937' },
       },
       timeScale: { timeVisible: true },
-      rightPriceScale: {
-        autoScale: true,
-        borderVisible: false,
-      },
+      rightPriceScale: { autoScale: true },
     });
 
     chartRef.current = chart;
+    candleSeriesRef.current = chart.addCandlestickSeries();
 
-    candleSeriesRef.current = chart.addCandlestickSeries({
-      priceScaleId: 'right',
-    });
+    // CREATE ALL SERIES ONCE
+    const mk = (color: string) =>
+      chart.addLineSeries({ color, visible: false });
 
-    // 🔒 CREATE ALL INDICATORS ON SAME PRICE SCALE
     seriesRef.current = {
-      ema9: chart.addLineSeries({ color: '#22c55e', visible: false, priceScaleId: 'right' }),
-      ema21: chart.addLineSeries({ color: '#3b82f6', visible: false, priceScaleId: 'right' }),
-      sma50: chart.addLineSeries({ color: '#f59e0b', visible: false, priceScaleId: 'right' }),
-      sma200: chart.addLineSeries({ color: '#ef4444', visible: false, priceScaleId: 'right' }),
-      vwap: chart.addLineSeries({ color: '#14b8a6', visible: false, priceScaleId: 'right' }),
-      bb_upper: chart.addLineSeries({ color: '#a855f7', visible: false, priceScaleId: 'right' }),
-      bb_lower: chart.addLineSeries({ color: '#a855f7', visible: false, priceScaleId: 'right' }),
+      ema5: mk('#16a34a'),
+      ema9: mk('#22c55e'),
+      ema13: mk('#4ade80'),
+      ema21: mk('#3b82f6'),
+      ema50: mk('#60a5fa'),
+      ema100: mk('#818cf8'),
+      ema200: mk('#a855f7'),
+
+      sma20: mk('#fbbf24'),
+      sma50: mk('#f59e0b'),
+      sma100: mk('#fb7185'),
+      sma200: mk('#ef4444'),
+
+      wma20: mk('#14b8a6'),
+      hma20: mk('#06b6d4'),
+
+      vwap: mk('#0ea5e9'),
+      bb_upper: mk('#d946ef'),
+      bb_lower: mk('#d946ef'),
     };
 
     initData();
@@ -77,7 +99,6 @@ export default function TradingChart({ onPriceUpdate }: any) {
     return () => clearInterval(intervalRef.current);
   }, []);
 
-  /* ================= DATA ================= */
   function initData() {
     candles.current = [];
     volume.current = [];
@@ -98,29 +119,39 @@ export default function TradingChart({ onPriceUpdate }: any) {
       price = close;
       t += TIMEFRAMES[tf];
     }
-
     recalcIndicators();
   }
 
   function tick() {
     const last = candles.current.at(-1)!;
-    const newPrice = last.close + (Math.random() - 0.5) * 20;
+    const p = last.close + (Math.random() - 0.5) * 20;
 
-    last.close = newPrice;
-    last.high = Math.max(last.high, newPrice);
-    last.low = Math.min(last.low, newPrice);
+    last.close = p;
+    last.high = Math.max(last.high, p);
+    last.low = Math.min(last.low, p);
 
     candleSeriesRef.current.update(last);
     recalcIndicators();
-    onPriceUpdate?.(newPrice);
+    onPriceUpdate?.(p);
   }
 
-  /* ================= INDICATORS ================= */
   function recalcIndicators() {
+    seriesRef.current.ema5.setData(calcEMA(candles.current, 5));
     seriesRef.current.ema9.setData(calcEMA(candles.current, 9));
+    seriesRef.current.ema13.setData(calcEMA(candles.current, 13));
     seriesRef.current.ema21.setData(calcEMA(candles.current, 21));
+    seriesRef.current.ema50.setData(calcEMA(candles.current, 50));
+    seriesRef.current.ema100.setData(calcEMA(candles.current, 100));
+    seriesRef.current.ema200.setData(calcEMA(candles.current, 200));
+
+    seriesRef.current.sma20.setData(calcSMA(candles.current, 20));
     seriesRef.current.sma50.setData(calcSMA(candles.current, 50));
+    seriesRef.current.sma100.setData(calcSMA(candles.current, 100));
     seriesRef.current.sma200.setData(calcSMA(candles.current, 200));
+
+    seriesRef.current.wma20.setData(calcWMA(candles.current, 20));
+    seriesRef.current.hma20.setData(calcHMA(candles.current, 20));
+
     seriesRef.current.vwap.setData(calcVWAP(candles.current, volume.current));
 
     const { upper, lower } = calcBB(candles.current, 20);
@@ -128,15 +159,15 @@ export default function TradingChart({ onPriceUpdate }: any) {
     seriesRef.current.bb_lower.setData(lower);
   }
 
-  /* ================= VISIBILITY ================= */
   useEffect(() => {
-    seriesRef.current.ema9.applyOptions({ visible: ind.ema9 });
-    seriesRef.current.ema21.applyOptions({ visible: ind.ema21 });
-    seriesRef.current.sma50.applyOptions({ visible: ind.sma50 });
-    seriesRef.current.sma200.applyOptions({ visible: ind.sma200 });
-    seriesRef.current.vwap.applyOptions({ visible: ind.vwap });
-    seriesRef.current.bb_upper.applyOptions({ visible: ind.bb });
-    seriesRef.current.bb_lower.applyOptions({ visible: ind.bb });
+    Object.entries(ind).forEach(([k, v]) => {
+      if (k === 'bb') {
+        seriesRef.current.bb_upper.applyOptions({ visible: v });
+        seriesRef.current.bb_lower.applyOptions({ visible: v });
+      } else {
+        seriesRef.current[k]?.applyOptions({ visible: v });
+      }
+    });
   }, [ind]);
 
   return (
@@ -153,7 +184,6 @@ export default function TradingChart({ onPriceUpdate }: any) {
             {x}
           </button>
         ))}
-
         <button
           onClick={() => setDrawerOpen(v => !v)}
           className="ml-auto px-3 py-1 bg-zinc-800 rounded"
@@ -165,15 +195,13 @@ export default function TradingChart({ onPriceUpdate }: any) {
       <div ref={containerRef} className="w-full h-[420px]" />
 
       {drawerOpen && (
-        <div className="absolute top-0 right-0 h-full w-64 bg-black border-l border-zinc-700 p-3">
+        <div className="absolute top-0 right-0 h-full w-64 bg-black border-l border-zinc-700 p-3 overflow-y-auto">
           {Object.keys(ind).map(k => (
             <label key={k} className="flex gap-2 mb-2 text-sm">
               <input
                 type="checkbox"
                 checked={ind[k]}
-                onChange={() =>
-                  setInd(s => ({ ...s, [k]: !s[k] }))
-                }
+                onChange={() => setInd(s => ({ ...s, [k]: !s[k] }))}
               />
               {k.toUpperCase()}
             </label>
@@ -184,28 +212,39 @@ export default function TradingChart({ onPriceUpdate }: any) {
   );
 }
 
-/* ================= MATH ================= */
+/* ===== MATH ===== */
 function calcEMA(c: CandlestickData[], p: number): LineData[] {
   const k = 2 / (p + 1);
   let ema = c[0].close;
-  return c.map(x => {
-    ema = x.close * k + ema * (1 - k);
-    return { time: x.time, value: ema };
-  });
+  return c.map(x => ({ time: x.time, value: (ema = x.close * k + ema * (1 - k)) }));
 }
-
 function calcSMA(c: CandlestickData[], p: number): LineData[] {
+  return c.map((x, i) => ({
+    time: x.time,
+    value:
+      i < p
+        ? x.close
+        : c.slice(i - p, i).reduce((a, b) => a + b.close, 0) / p,
+  }));
+}
+function calcWMA(c: CandlestickData[], p: number): LineData[] {
   return c.map((x, i) => {
     if (i < p) return { time: x.time, value: x.close };
-    const avg = c.slice(i - p, i).reduce((a, b) => a + b.close, 0) / p;
-    return { time: x.time, value: avg };
+    let sum = 0,
+      w = 0;
+    for (let j = 0; j < p; j++) {
+      sum += c[i - j].close * (p - j);
+      w += p - j;
+    }
+    return { time: x.time, value: sum / w };
   });
 }
-
+function calcHMA(c: CandlestickData[], p: number) {
+  return calcWMA(c, Math.floor(p / 2));
+}
 function calcBB(c: CandlestickData[], p: number) {
   const upper: LineData[] = [];
   const lower: LineData[] = [];
-
   c.forEach((x, i) => {
     if (i < p) return;
     const slice = c.slice(i - p, i);
@@ -216,13 +255,11 @@ function calcBB(c: CandlestickData[], p: number) {
     upper.push({ time: x.time, value: mean + 2 * std });
     lower.push({ time: x.time, value: mean - 2 * std });
   });
-
   return { upper, lower };
 }
-
-function calcVWAP(c: CandlestickData[], v: number[]): LineData[] {
-  let pv = 0;
-  let tv = 0;
+function calcVWAP(c: CandlestickData[], v: number[]) {
+  let pv = 0,
+    tv = 0;
   return c.map((x, i) => {
     pv += x.close * v[i];
     tv += v[i];
