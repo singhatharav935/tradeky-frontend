@@ -65,7 +65,6 @@ export default function TradingChart({ onPriceUpdate }: any) {
     chartRef.current = chart;
     candleSeriesRef.current = chart.addCandlestickSeries();
 
-    // CREATE ALL SERIES ONCE
     const mk = (color: string) =>
       chart.addLineSeries({ color, visible: false });
 
@@ -201,7 +200,14 @@ export default function TradingChart({ onPriceUpdate }: any) {
               <input
                 type="checkbox"
                 checked={ind[k]}
-                onChange={() => setInd(s => ({ ...s, [k]: !s[k] }))}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setInd(prev => {
+                    const next = { ...prev };
+                    next[k] = checked;
+                    return next;
+                  });
+                }}
               />
               {k.toUpperCase()}
             </label>
