@@ -9,7 +9,6 @@ import {
   UTCTimestamp,
 } from 'lightweight-charts';
 
-/* ================= CONFIG ================= */
 const TIMEFRAMES = { '1m': 60, '5m': 300, '15m': 900 };
 
 type IndicatorMap = Record<string, boolean>;
@@ -17,7 +16,8 @@ type IndicatorMap = Record<string, boolean>;
 export default function TradingChart({ onPriceUpdate }: any) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<any>(null);
-  const candleSeries = useRef<any>(null);
+  const candleSeriesRef = useRef<any>(null);
+  const intervalRef = useRef<any>(null);
 
   const indicatorSeries = useRef<Record<string, ISeriesApi<'Line'>>>({});
   const candles = useRef<CandlestickData[]>([]);
@@ -27,60 +27,51 @@ export default function TradingChart({ onPriceUpdate }: any) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const [ind, setInd] = useState<IndicatorMap>({
-    // EMA
-    ema5: false,
     ema9: false,
-    ema13: false,
     ema21: false,
-    ema50: false,
-    ema100: false,
-    ema200: false,
-
-    // SMA
-    sma10: false,
-    sma20: false,
     sma50: false,
-    sma100: false,
     sma200: false,
-
-    // Core
     vwap: false,
     bb: false,
-    rsi: false,
-    macd: false,
   });
 
   const now = (): UTCTimestamp =>
     Math.floor(Date.now() / 1000) as UTCTimestamp;
 
-  /* ================= CHART INIT ================= */
+  /* ================= CHART INIT (ONCE) ================= */
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || chartRef.current) return;
 
-    chartRef.current = createChart(containerRef.current, {
+    const chart = createChart(containerRef.current, {
       height: 420,
-      width: containerRef.current.clientWidth,
       layout: { background: { color: '#000' }, textColor: '#d1d4dc' },
       grid: {
         vertLines: { color: '#1f2937' },
         horzLines: { color: '#1f2937' },
       },
       timeScale: { timeVisible: true, secondsVisible: tf === '1m' },
-      rightPriceScale: { scaleMargins: { top: 0.1, bottom: 0.25 } },
     });
 
-    candleSeries.current = chartRef.current.addCandlestickSeries();
+    chartRef.current = chart;
+    candleSeriesRef.current = chart.addCandlestickSeries();
 
     initData();
-    candleSeries.current.setData(candles.current);
-    chartRef.current.timeScale().fitContent();
+    candleSeriesRef.current.setData(candles.current);
+    chart.timeScale().fitContent();
 
-    const interval = setInterval(tick, 1000);
+    intervalRef.current = setInterval(tick, 1000);
+
     return () => {
-      clearInterval(interval);
-      chartRef.current.remove();
-      indicatorSeries.current = {};
+      clearInterval(intervalRef.current);
     };
+  }, []);
+
+  /* ================= TIMEFRAME CHANGE ================= */
+  useEffect(() => {
+    if (!chartRef.current) return;
+    initData();
+    candleSeriesRef.current.setData(candles.current);
+    recalcIndicators();
   }, [tf]);
 
   /* ================= DATA ================= */
@@ -96,8 +87,8 @@ export default function TradingChart({ onPriceUpdate }: any) {
       candles.current.push({
         time: t as UTCTimestamp,
         open: price,
-        high: Math.max(price, close) + 20,
-        low: Math.min(price, close) - 20,
+        high: Math.max(price, close),
+        low: Math.min(price, close),
         close,
       });
       volume.current.push(Math.random() * 1000);
@@ -113,8 +104,8 @@ export default function TradingChart({ onPriceUpdate }: any) {
     last.close = newPrice;
     last.high = Math.max(last.high, newPrice);
     last.low = Math.min(last.low, newPrice);
-    candleSeries.current.update(last);
 
+    candleSeriesRef.current.update(last);
     recalcIndicators();
     onPriceUpdate?.(newPrice);
   }
@@ -123,59 +114,44 @@ export default function TradingChart({ onPriceUpdate }: any) {
   function getSeries(key: string, color: string) {
     if (!indicatorSeries.current[key]) {
       indicatorSeries.current[key] =
-        chartRef.current.addLineSeries({ color, visible: true });
+        chartRef.current.addLineSeries({ color, visible: false });
     }
     return indicatorSeries.current[key];
   }
 
-  function setVisible(key: string, visible: boolean) {
-    const s = indicatorSeries.current[key];
-    if (s) s.applyOptions({ visible });
+  function recalcIndicators() {
+    if (ind.ema9)
+      getSeries('ema9', '#22c55e').setData(calcEMA(candles.current, 9));
+    if (ind.ema21)
+      getSeries('ema21', '#3b82f6').setData(calcEMA(candles.current, 21));
+    if (ind.sma50)
+      getSeries('sma50', '#f59e0b').setData(calcSMA(candles.current, 50));
+    if (ind.sma200)
+      getSeries('sma200', '#ef4444').setData(calcSMA(candles.current, 200));
+    if (ind.vwap)
+      getSeries('vwap', '#14b8a6').setData(calcVWAP(candles.current, volume.current));
+
+    if (ind.bb) {
+      const { upper, lower } = calcBB(candles.current, 20);
+      getSeries('bb_upper', '#a855f7').setData(upper);
+      getSeries('bb_lower', '#a855f7').setData(lower);
+    }
   }
 
-  function recalcIndicators() {
+  /* ================= VISIBILITY ONLY ================= */
+  useEffect(() => {
     Object.entries(ind).forEach(([key, enabled]) => {
-      if (key.startsWith('ema')) {
-        const p = Number(key.replace('ema', ''));
-        const s = getSeries(key, '#22c55e');
-        s.setData(calcEMA(candles.current, p));
-        setVisible(key, enabled);
-      }
-
-      if (key.startsWith('sma')) {
-        const p = Number(key.replace('sma', ''));
-        const s = getSeries(key, '#f59e0b');
-        s.setData(calcSMA(candles.current, p));
-        setVisible(key, enabled);
-      }
-
-      if (key === 'vwap') {
-        const s = getSeries(key, '#14b8a6');
-        s.setData(calcVWAP(candles.current, volume.current));
-        setVisible(key, enabled);
-      }
-
       if (key === 'bb') {
-        const { upper, lower } = calcBB(candles.current, 20);
-        const u = getSeries('bb_upper', '#a855f7');
-        const l = getSeries('bb_lower', '#a855f7');
-        u.setData(upper);
-        l.setData(lower);
-        setVisible('bb_upper', enabled);
-        setVisible('bb_lower', enabled);
+        indicatorSeries.current['bb_upper']?.applyOptions({ visible: enabled });
+        indicatorSeries.current['bb_lower']?.applyOptions({ visible: enabled });
+      } else {
+        indicatorSeries.current[key]?.applyOptions({ visible: enabled });
       }
     });
-  }
-
-  /* 🔥 REACT STATE → CHART SYNC (CRITICAL FIX) */
-  useEffect(() => {
-    if (!chartRef.current) return;
-    recalcIndicators();
   }, [ind]);
 
   return (
     <div className="relative bg-zinc-900 p-2 rounded border border-zinc-800">
-      {/* TOP BAR */}
       <div className="flex gap-2 mb-2 text-xs">
         {(['1m', '5m', '15m'] as const).map(x => (
           <button
@@ -191,7 +167,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
         <button
           onClick={() => setDrawerOpen(v => !v)}
-          className="ml-auto px-3 py-1 bg-zinc-800 rounded hover:bg-zinc-700"
+          className="ml-auto px-3 py-1 bg-zinc-800 rounded"
         >
           Indicators
         </button>
@@ -199,12 +175,10 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
       <div ref={containerRef} className="w-full h-[420px]" />
 
-      {/* DRAWER */}
       {drawerOpen && (
-        <div className="absolute top-0 right-0 h-full w-64 bg-black border-l border-zinc-700 p-3 overflow-y-auto text-sm z-50">
-          <h3 className="font-semibold mb-3">Indicators</h3>
+        <div className="absolute top-0 right-0 h-full w-64 bg-black border-l border-zinc-700 p-3">
           {Object.keys(ind).map(k => (
-            <label key={k} className="flex items-center gap-2 mb-2">
+            <label key={k} className="flex gap-2 mb-2 text-sm">
               <input
                 type="checkbox"
                 checked={ind[k]}
@@ -212,7 +186,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
                   setInd(s => ({ ...s, [k]: !s[k] }))
                 }
               />
-              <span>{k.toUpperCase()}</span>
+              {k.toUpperCase()}
             </label>
           ))}
         </div>
@@ -234,7 +208,8 @@ function calcEMA(c: CandlestickData[], p: number): LineData[] {
 function calcSMA(c: CandlestickData[], p: number): LineData[] {
   return c.map((x, i) => {
     if (i < p) return { time: x.time, value: x.close };
-    const avg = c.slice(i - p, i).reduce((a, b) => a + b.close, 0) / p;
+    const avg =
+      c.slice(i - p, i).reduce((a, b) => a + b.close, 0) / p;
     return { time: x.time, value: avg };
   });
 }
@@ -242,21 +217,25 @@ function calcSMA(c: CandlestickData[], p: number): LineData[] {
 function calcBB(c: CandlestickData[], p: number) {
   const upper: LineData[] = [];
   const lower: LineData[] = [];
+
   c.forEach((x, i) => {
     if (i < p) return;
     const slice = c.slice(i - p, i);
-    const mean = slice.reduce((a, b) => a + b.close, 0) / p;
+    const mean =
+      slice.reduce((a, b) => a + b.close, 0) / p;
     const std = Math.sqrt(
       slice.reduce((a, b) => a + (b.close - mean) ** 2, 0) / p
     );
     upper.push({ time: x.time, value: mean + 2 * std });
     lower.push({ time: x.time, value: mean - 2 * std });
   });
+
   return { upper, lower };
 }
 
 function calcVWAP(c: CandlestickData[], v: number[]): LineData[] {
-  let pv = 0, tv = 0;
+  let pv = 0;
+  let tv = 0;
   return c.map((x, i) => {
     pv += x.close * v[i];
     tv += v[i];
