@@ -10,7 +10,6 @@ import {
 } from 'lightweight-charts';
 
 const TIMEFRAMES = { '1m': 60, '5m': 300, '15m': 900 };
-
 type IndicatorMap = Record<string, boolean>;
 
 export default function TradingChart({ onPriceUpdate }: any) {
@@ -38,7 +37,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
   const now = (): UTCTimestamp =>
     Math.floor(Date.now() / 1000) as UTCTimestamp;
 
-  /* ================= CHART INIT (ONCE) ================= */
+  /* ================= CHART INIT ================= */
   useEffect(() => {
     if (!containerRef.current || chartRef.current) return;
 
@@ -61,12 +60,10 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
     intervalRef.current = setInterval(tick, 1000);
 
-    return () => {
-      clearInterval(intervalRef.current);
-    };
+    return () => clearInterval(intervalRef.current);
   }, []);
 
-  /* ================= TIMEFRAME CHANGE ================= */
+  /* ================= TIMEFRAME ================= */
   useEffect(() => {
     if (!chartRef.current) return;
     initData();
@@ -120,30 +117,23 @@ export default function TradingChart({ onPriceUpdate }: any) {
   }
 
   function recalcIndicators() {
-    if (ind.ema9)
-      getSeries('ema9', '#22c55e').setData(calcEMA(candles.current, 9));
-    if (ind.ema21)
-      getSeries('ema21', '#3b82f6').setData(calcEMA(candles.current, 21));
-    if (ind.sma50)
-      getSeries('sma50', '#f59e0b').setData(calcSMA(candles.current, 50));
-    if (ind.sma200)
-      getSeries('sma200', '#ef4444').setData(calcSMA(candles.current, 200));
-    if (ind.vwap)
-      getSeries('vwap', '#14b8a6').setData(calcVWAP(candles.current, volume.current));
+    getSeries('ema9', '#22c55e').setData(calcEMA(candles.current, 9));
+    getSeries('ema21', '#3b82f6').setData(calcEMA(candles.current, 21));
+    getSeries('sma50', '#f59e0b').setData(calcSMA(candles.current, 50));
+    getSeries('sma200', '#ef4444').setData(calcSMA(candles.current, 200));
+    getSeries('vwap', '#14b8a6').setData(calcVWAP(candles.current, volume.current));
 
-    if (ind.bb) {
-      const { upper, lower } = calcBB(candles.current, 20);
-      getSeries('bb_upper', '#a855f7').setData(upper);
-      getSeries('bb_lower', '#a855f7').setData(lower);
-    }
+    const { upper, lower } = calcBB(candles.current, 20);
+    getSeries('bb_upper', '#a855f7').setData(upper);
+    getSeries('bb_lower', '#a855f7').setData(lower);
   }
 
   /* ================= VISIBILITY ONLY ================= */
   useEffect(() => {
     Object.entries(ind).forEach(([key, enabled]) => {
       if (key === 'bb') {
-        indicatorSeries.current['bb_upper']?.applyOptions({ visible: enabled });
-        indicatorSeries.current['bb_lower']?.applyOptions({ visible: enabled });
+        indicatorSeries.current.bb_upper?.applyOptions({ visible: enabled });
+        indicatorSeries.current.bb_lower?.applyOptions({ visible: enabled });
       } else {
         indicatorSeries.current[key]?.applyOptions({ visible: enabled });
       }
