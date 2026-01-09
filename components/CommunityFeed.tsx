@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from 'react';
 
+type Media = {
+  type: 'image' | 'video';
+  url: string;
+};
+
 type Comment = {
   _id?: string;
   text: string;
@@ -13,6 +18,7 @@ type Post = {
   _id: string;
   content: string;
   createdAt: string;
+  media?: Media[]; // ✅ ADDED
   user?: {
     _id?: string;
     name?: string;
@@ -150,10 +156,36 @@ export default function CommunityFeed({
 
         return (
           <div key={post._id} className="bg-zinc-900 p-4 rounded border border-zinc-800">
-            <p className="text-sm whitespace-pre-wrap">{post.content}</p>
+            {/* TEXT */}
+            {post.content && (
+              <p className="text-sm whitespace-pre-wrap mb-3">{post.content}</p>
+            )}
+
+            {/* 🔥 MEDIA SECTION */}
+            {post.media && post.media.length > 0 && (
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                {post.media.map((m, i) =>
+                  m.type === 'image' ? (
+                    <img
+                      key={i}
+                      src={m.url}
+                      className="rounded border border-zinc-700"
+                      alt="strategy media"
+                    />
+                  ) : (
+                    <video
+                      key={i}
+                      src={m.url}
+                      controls
+                      className="rounded border border-zinc-700"
+                    />
+                  )
+                )}
+              </div>
+            )}
 
             {/* META */}
-            <div className="flex justify-between items-center mt-4">
+            <div className="flex justify-between items-center mt-2">
               <p className="text-xs text-gray-400">
                 {post.user?.name || 'Trader'} •{' '}
                 {new Date(post.createdAt).toLocaleString()}
