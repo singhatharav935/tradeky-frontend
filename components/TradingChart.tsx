@@ -10,7 +10,6 @@ import {
 } from 'lightweight-charts';
 
 const TIMEFRAMES = { '1m': 60, '5m': 300, '15m': 900 };
-
 type IndicatorMap = Record<string, boolean>;
 
 export default function TradingChart({ onPriceUpdate }: any) {
@@ -47,20 +46,27 @@ export default function TradingChart({ onPriceUpdate }: any) {
         horzLines: { color: '#1f2937' },
       },
       timeScale: { timeVisible: true },
+      rightPriceScale: {
+        autoScale: true,
+        borderVisible: false,
+      },
     });
 
     chartRef.current = chart;
-    candleSeriesRef.current = chart.addCandlestickSeries();
 
-    // 🔒 CREATE ALL SERIES ONCE
+    candleSeriesRef.current = chart.addCandlestickSeries({
+      priceScaleId: 'right',
+    });
+
+    // 🔒 CREATE ALL INDICATORS ON SAME PRICE SCALE
     seriesRef.current = {
-      ema9: chart.addLineSeries({ color: '#22c55e', visible: false }),
-      ema21: chart.addLineSeries({ color: '#3b82f6', visible: false }),
-      sma50: chart.addLineSeries({ color: '#f59e0b', visible: false }),
-      sma200: chart.addLineSeries({ color: '#ef4444', visible: false }),
-      vwap: chart.addLineSeries({ color: '#14b8a6', visible: false }),
-      bb_upper: chart.addLineSeries({ color: '#a855f7', visible: false }),
-      bb_lower: chart.addLineSeries({ color: '#a855f7', visible: false }),
+      ema9: chart.addLineSeries({ color: '#22c55e', visible: false, priceScaleId: 'right' }),
+      ema21: chart.addLineSeries({ color: '#3b82f6', visible: false, priceScaleId: 'right' }),
+      sma50: chart.addLineSeries({ color: '#f59e0b', visible: false, priceScaleId: 'right' }),
+      sma200: chart.addLineSeries({ color: '#ef4444', visible: false, priceScaleId: 'right' }),
+      vwap: chart.addLineSeries({ color: '#14b8a6', visible: false, priceScaleId: 'right' }),
+      bb_upper: chart.addLineSeries({ color: '#a855f7', visible: false, priceScaleId: 'right' }),
+      bb_lower: chart.addLineSeries({ color: '#a855f7', visible: false, priceScaleId: 'right' }),
     };
 
     initData();
@@ -68,7 +74,6 @@ export default function TradingChart({ onPriceUpdate }: any) {
     chart.timeScale().fitContent();
 
     intervalRef.current = setInterval(tick, 1000);
-
     return () => clearInterval(intervalRef.current);
   }, []);
 
@@ -77,10 +82,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
     candles.current = [];
     volume.current = [];
 
-    let t =
-      Math.floor(Date.now() / 1000) -
-      TIMEFRAMES[tf] * 60;
-
+    let t = Math.floor(Date.now() / 1000) - TIMEFRAMES[tf] * 60;
     let price = 42000;
 
     for (let i = 0; i < 60; i++) {
@@ -119,9 +121,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
     seriesRef.current.ema21.setData(calcEMA(candles.current, 21));
     seriesRef.current.sma50.setData(calcSMA(candles.current, 50));
     seriesRef.current.sma200.setData(calcSMA(candles.current, 200));
-    seriesRef.current.vwap.setData(
-      calcVWAP(candles.current, volume.current)
-    );
+    seriesRef.current.vwap.setData(calcVWAP(candles.current, volume.current));
 
     const { upper, lower } = calcBB(candles.current, 20);
     seriesRef.current.bb_upper.setData(upper);
@@ -139,7 +139,6 @@ export default function TradingChart({ onPriceUpdate }: any) {
     seriesRef.current.bb_lower.applyOptions({ visible: ind.bb });
   }, [ind]);
 
-  /* ================= UI ================= */
   return (
     <div className="relative bg-zinc-900 p-2 rounded border border-zinc-800">
       <div className="flex gap-2 mb-2 text-xs">
@@ -198,8 +197,7 @@ function calcEMA(c: CandlestickData[], p: number): LineData[] {
 function calcSMA(c: CandlestickData[], p: number): LineData[] {
   return c.map((x, i) => {
     if (i < p) return { time: x.time, value: x.close };
-    const avg =
-      c.slice(i - p, i).reduce((a, b) => a + b.close, 0) / p;
+    const avg = c.slice(i - p, i).reduce((a, b) => a + b.close, 0) / p;
     return { time: x.time, value: avg };
   });
 }
@@ -211,8 +209,7 @@ function calcBB(c: CandlestickData[], p: number) {
   c.forEach((x, i) => {
     if (i < p) return;
     const slice = c.slice(i - p, i);
-    const mean =
-      slice.reduce((a, b) => a + b.close, 0) / p;
+    const mean = slice.reduce((a, b) => a + b.close, 0) / p;
     const std = Math.sqrt(
       slice.reduce((a, b) => a + (b.close - mean) ** 2, 0) / p
     );
