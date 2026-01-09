@@ -9,7 +9,16 @@ import {
   UTCTimestamp,
 } from 'lightweight-charts';
 
-const TIMEFRAMES = { '1m': 60, '5m': 300, '15m': 900 };
+/* ================= TIMEFRAMES ================= */
+const TIMEFRAMES: Record<string, number> = {
+  '1m': 60,
+  '5m': 300,
+  '10m': 600,
+  '15m': 900,
+  '30m': 1800,
+  '60m': 3600,
+};
+
 type IndicatorMap = Record<string, boolean>;
 
 export default function TradingChart({ onPriceUpdate }: any) {
@@ -22,8 +31,10 @@ export default function TradingChart({ onPriceUpdate }: any) {
   const candles = useRef<CandlestickData[]>([]);
   const volume = useRef<number[]>([]);
 
+  const [tf, setTf] = useState('1m');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  /* ================= INDICATORS ================= */
   const [ind, setInd] = useState<IndicatorMap>({
     ema5: false,
     ema9: false,
@@ -32,21 +43,24 @@ export default function TradingChart({ onPriceUpdate }: any) {
     ema50: false,
     ema100: false,
     ema200: false,
+
     sma20: false,
     sma50: false,
     sma100: false,
     sma200: false,
+
     wma20: false,
     hma20: false,
+
     vwap: false,
     bb: false,
   });
 
-  /* ================= INIT ================= */
+  /* ================= INIT CHART ================= */
   useEffect(() => {
-    if (!containerRef.current || chartRef.current) return;
+    if (!containerRef.current) return;
 
-    const chart = createChart(containerRef.current, {
+    chartRef.current = createChart(containerRef.current, {
       height: 420,
       layout: { background: { color: '#000' }, textColor: '#d1d4dc' },
       grid: {
@@ -55,16 +69,20 @@ export default function TradingChart({ onPriceUpdate }: any) {
       },
       timeScale: { timeVisible: true },
       rightPriceScale: {
-        autoScale: false,
+        autoScale: true,
         scaleMargins: { top: 0.15, bottom: 0.25 },
       },
     });
 
-    chartRef.current = chart;
-    candleSeriesRef.current = chart.addCandlestickSeries();
+    candleSeriesRef.current =
+      chartRef.current.addCandlestickSeries();
 
     const mk = (color: string) =>
-      chart.addLineSeries({ color, visible: false });
+      chartRef.current.addLineSeries({
+        color,
+        visible: false,
+        priceScaleId: 'right',
+      });
 
     seriesRef.current = {
       ema5: mk('#16a34a'),
@@ -74,30 +92,45 @@ export default function TradingChart({ onPriceUpdate }: any) {
       ema50: mk('#60a5fa'),
       ema100: mk('#818cf8'),
       ema200: mk('#a855f7'),
+
       sma20: mk('#fbbf24'),
       sma50: mk('#f59e0b'),
       sma100: mk('#fb7185'),
       sma200: mk('#ef4444'),
+
       wma20: mk('#14b8a6'),
       hma20: mk('#06b6d4'),
+
       vwap: mk('#0ea5e9'),
       bb_upper: mk('#d946ef'),
       bb_lower: mk('#d946ef'),
     };
 
-    initData();
-    candleSeriesRef.current.setData(candles.current);
-    chart.timeScale().fitContent();
-
-    intervalRef.current = setInterval(tick, 1000);
-    return () => clearInterval(intervalRef.current);
+    return () => {
+      clearInterval(intervalRef.current);
+      chartRef.current.remove();
+    };
   }, []);
 
+  /* ================= LOAD DATA ON TF ================= */
+  useEffect(() => {
+    if (!chartRef.current) return;
+
+    initData();
+    candleSeriesRef.current.setData(candles.current);
+    chartRef.current.timeScale().fitContent();
+
+    clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(tick, 1000);
+  }, [tf]);
+
+  /* ================= DATA ================= */
   function initData() {
     candles.current = [];
     volume.current = [];
 
-    let t = Math.floor(Date.now() / 1000) - 60 * 60;
+    const step = TIMEFRAMES[tf];
+    let t = Math.floor(Date.now() / 1000) - step * 60;
     let price = 42000;
 
     for (let i = 0; i < 60; i++) {
@@ -111,7 +144,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
       });
       volume.current.push(Math.random() * 1000);
       price = close;
-      t += 60;
+      t += step;
     }
 
     recalcIndicators();
@@ -130,6 +163,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
     onPriceUpdate?.(p);
   }
 
+  /* ================= INDICATORS ================= */
   function recalcIndicators() {
     seriesRef.current.ema5.setData(calcEMA(candles.current, 5));
     seriesRef.current.ema9.setData(calcEMA(candles.current, 9));
@@ -138,18 +172,23 @@ export default function TradingChart({ onPriceUpdate }: any) {
     seriesRef.current.ema50.setData(calcEMA(candles.current, 50));
     seriesRef.current.ema100.setData(calcEMA(candles.current, 100));
     seriesRef.current.ema200.setData(calcEMA(candles.current, 200));
+
     seriesRef.current.sma20.setData(calcSMA(candles.current, 20));
     seriesRef.current.sma50.setData(calcSMA(candles.current, 50));
     seriesRef.current.sma100.setData(calcSMA(candles.current, 100));
     seriesRef.current.sma200.setData(calcSMA(candles.current, 200));
+
     seriesRef.current.wma20.setData(calcWMA(candles.current, 20));
     seriesRef.current.hma20.setData(calcWMA(candles.current, 10));
+
     seriesRef.current.vwap.setData(calcVWAP(candles.current, volume.current));
+
     const { upper, lower } = calcBB(candles.current, 20);
     seriesRef.current.bb_upper.setData(upper);
     seriesRef.current.bb_lower.setData(lower);
   }
 
+  /* ================= VISIBILITY ================= */
   useEffect(() => {
     Object.entries(ind).forEach(([k, v]) => {
       if (k === 'bb') {
@@ -161,19 +200,34 @@ export default function TradingChart({ onPriceUpdate }: any) {
     });
   }, [ind]);
 
+  /* ================= UI ================= */
   return (
     <div className="relative bg-zinc-900 p-2 rounded border border-zinc-800">
-      <button
-        onClick={() => setDrawerOpen(v => !v)}
-        className="absolute top-2 right-2 px-3 py-1 bg-zinc-800 rounded"
-      >
-        Indicators
-      </button>
+      {/* TIMEFRAMES */}
+      <div className="flex gap-2 mb-2 text-xs">
+        {Object.keys(TIMEFRAMES).map(x => (
+          <button
+            key={x}
+            onClick={() => setTf(x)}
+            className={`px-2 py-1 rounded ${
+              tf === x ? 'bg-yellow-500 text-black' : 'bg-zinc-800'
+            }`}
+          >
+            {x}
+          </button>
+        ))}
+        <button
+          onClick={() => setDrawerOpen(v => !v)}
+          className="ml-auto px-3 py-1 bg-zinc-800 rounded"
+        >
+          Indicators
+        </button>
+      </div>
 
       <div ref={containerRef} className="w-full h-[420px]" />
 
       {drawerOpen && (
-        <div className="absolute top-0 right-0 h-full w-64 bg-black border-l border-zinc-700 p-3 overflow-y-auto">
+        <div className="absolute top-0 right-0 h-full w-64 bg-black border-l border-zinc-700 p-3 overflow-y-auto z-50">
           {Object.keys(ind).map(k => (
             <label key={k} className="flex gap-2 mb-2 text-sm">
               <input
@@ -192,7 +246,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
   );
 }
 
-/* ===== MATH ===== */
+/* ================= MATH ================= */
 function calcEMA(c: CandlestickData[], p: number): LineData[] {
   const k = 2 / (p + 1);
   let ema = c[0].close;
