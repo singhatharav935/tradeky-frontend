@@ -30,7 +30,9 @@ export default function DashboardPage() {
   const [symbol, setSymbol] = useState<'BTC' | 'NIFTY' | 'BANKNIFTY'>('BTC');
   const [price, setPrice] = useState<number>(0);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [showBadgeMessage, setShowBadgeMessage] = useState(false);
+
+  const [showCertPanel, setShowCertPanel] = useState(false);
+  const [showPropMessage, setShowPropMessage] = useState(false);
 
   const [summary, setSummary] = useState<Summary>({
     balance: 0,
@@ -142,7 +144,6 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* 🔹 BUTTONS */}
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push('/community')}
@@ -165,9 +166,11 @@ export default function DashboardPage() {
             Contest
           </button>
 
-          {/* 🎖️ CERTIFICATIONS & BADGES */}
           <button
-            onClick={() => setShowBadgeMessage(v => !v)}
+            onClick={() => {
+              setShowCertPanel(true);
+              setShowPropMessage(false);
+            }}
             className="px-3 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700"
           >
             Certifications &amp; Badges
@@ -187,10 +190,45 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 🎖️ BADGE MESSAGE */}
-      {showBadgeMessage && (
-        <div className="max-w-md border border-zinc-700 bg-zinc-900 rounded p-4 text-sm text-gray-300">
-          You haven’t earned any skill certificates or badges yet.
+      {/* ===== CERTIFICATIONS PANEL ===== */}
+      {showCertPanel && (
+        <div className="border border-zinc-700 bg-zinc-900 rounded-lg p-6 max-w-2xl">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-semibold">Certifications & Badges</h2>
+            <button
+              onClick={() => setShowCertPanel(false)}
+              className="text-sm text-gray-400 hover:text-white"
+            >
+              Close
+            </button>
+          </div>
+
+          <p className="text-sm text-gray-400 mb-4">
+            You haven’t earned any skill certificates or badges yet.
+          </p>
+
+          <div className="flex flex-wrap gap-3 mb-4">
+            <button
+              onClick={() => setShowPropMessage(true)}
+              className="px-4 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700"
+            >
+              Prop Funding Company Requirements
+            </button>
+
+            <button className="px-4 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700">
+              Upload Resume
+            </button>
+
+            <button className="px-4 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700">
+              Upload Certifications
+            </button>
+          </div>
+
+          {showPropMessage && (
+            <div className="text-sm text-gray-300 border border-zinc-700 bg-black rounded p-3">
+              No requirements are open at the moment.
+            </div>
+          )}
         </div>
       )}
 
