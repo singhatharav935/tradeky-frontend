@@ -150,7 +150,14 @@ export default function DashboardPage() {
             Community
           </button>
 
-          {/* ✅ NEW CONTEST BUTTON */}
+          {/* 🧠 CREATE ALERT BUTTON */}
+          <button
+            onClick={() => router.push('/alerts/create')}
+            className="px-3 py-2 bg-yellow-500 text-black rounded text-sm hover:bg-yellow-400"
+          >
+            Create Alert
+          </button>
+
           <button
             onClick={() => router.push('/contest')}
             className="px-3 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700"
