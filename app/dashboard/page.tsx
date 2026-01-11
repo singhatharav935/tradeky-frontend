@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const [symbol, setSymbol] = useState<'BTC' | 'NIFTY' | 'BANKNIFTY'>('BTC');
   const [price, setPrice] = useState<number>(0);
   const [positions, setPositions] = useState<Position[]>([]);
+  const [showBadgeMessage, setShowBadgeMessage] = useState(false);
 
   const [summary, setSummary] = useState<Summary>({
     balance: 0,
@@ -150,7 +151,6 @@ export default function DashboardPage() {
             Community
           </button>
 
-          {/* 🧠 CREATE ALERT BUTTON */}
           <button
             onClick={() => router.push('/alerts/create')}
             className="px-3 py-2 bg-yellow-500 text-black rounded text-sm hover:bg-yellow-400"
@@ -163,6 +163,14 @@ export default function DashboardPage() {
             className="px-3 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700"
           >
             Contest
+          </button>
+
+          {/* 🎖️ CERTIFICATIONS & BADGES */}
+          <button
+            onClick={() => setShowBadgeMessage(v => !v)}
+            className="px-3 py-2 bg-zinc-800 rounded text-sm hover:bg-zinc-700"
+          >
+            Certifications &amp; Badges
           </button>
 
           <select
@@ -178,6 +186,13 @@ export default function DashboardPage() {
           </select>
         </div>
       </div>
+
+      {/* 🎖️ BADGE MESSAGE */}
+      {showBadgeMessage && (
+        <div className="max-w-md border border-zinc-700 bg-zinc-900 rounded p-4 text-sm text-gray-300">
+          You haven’t earned any skill certificates or badges yet.
+        </div>
+      )}
 
       {/* ===== MONEY / P&L ===== */}
       <div className="grid grid-cols-4 gap-4">
