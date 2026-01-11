@@ -17,6 +17,11 @@ export default function GroupsPage() {
   const [loading, setLoading] = useState(true);
   const [myUserId, setMyUserId] = useState<string | null>(null);
 
+  const [showCreate, setShowCreate] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+
   const token =
     typeof window !== 'undefined'
       ? localStorage.getItem('token')
@@ -33,14 +38,49 @@ export default function GroupsPage() {
   }, [token]);
 
   /* ================= LOAD GROUPS ================= */
-  useEffect(() => {
-    fetch('https://tradeky-backend.onrender.com/api/groups', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+  const loadGroups = () => {
+    setLoading(true);
+    fetch('https://tradeky-backend.onrender.com/api/groups')
       .then(res => res.json())
       .then(setGroups)
       .finally(() => setLoading(false));
-  }, [token]);
+  };
+
+  useEffect(() => {
+    loadGroups();
+  }, []);
+
+  /* ================= CREATE GROUP ================= */
+  const createGroup = async () => {
+    if (!name.trim()) return alert('Group name required');
+
+    await fetch('https://tradeky-backend.onrender.com/api/groups', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ name, description, isPrivate }),
+    });
+
+    setName('');
+    setDescription('');
+    setIsPrivate(false);
+    setShowCreate(false);
+    loadGroups();
+  };
+
+  /* ================= JOIN / LEAVE ================= */
+  const toggleJoin = async (groupId: string) => {
+    await fetch(
+      `https://tradeky-backend.onrender.com/api/groups/${groupId}/join`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+    loadGroups();
+  };
 
   if (loading) return <p className="text-gray-400">Loading groups…</p>;
 
@@ -56,55 +96,58 @@ export default function GroupsPage() {
       !g.members?.includes(myUserId || '')
   );
 
-  const GroupCard = ({ group }: { group: Group }) => {
-    const isOwner = group.owner?._id === myUserId;
-    const isMember = group.members?.includes(myUserId || '');
-
-    return (
-      <Link
-        href={`/community/groups/${group._id}`}
-        className="block bg-zinc-900 border border-zinc-800 rounded p-4 hover:bg-zinc-800 transition"
-      >
-        <div className="flex justify-between items-center">
-          <h3 className="font-medium">{group.name}</h3>
-
-          <div className="flex gap-1 text-[10px]">
-            {group.isPrivate && (
-              <span className="bg-red-600 px-2 py-0.5 rounded">PRIVATE</span>
-            )}
-            {isOwner && (
-              <span className="bg-yellow-500 text-black px-2 py-0.5 rounded">
-                OWNER
-              </span>
-            )}
-            {!isOwner && isMember && (
-              <span className="bg-green-600 px-2 py-0.5 rounded">
-                MEMBER
-              </span>
-            )}
-          </div>
-        </div>
-
-        <p className="text-xs text-gray-400 mt-1">
-          {group.description || 'No description'}
-        </p>
-
-        <p className="text-xs text-gray-500 mt-2">
-          Members: {group.members?.length ?? 0}
-        </p>
-      </Link>
-    );
-  };
-
   return (
-    <div className="space-y-10 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-semibold">Groups</h1>
+    <div className="space-y-8 max-w-4xl mx-auto">
+      {/* HEADER */}
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-semibold">Groups</h1>
+
+        <button
+          onClick={() => setShowCreate(v => !v)}
+          className="px-3 py-1 bg-yellow-500 text-black rounded text-sm"
+        >
+          + Create Group
+        </button>
+      </div>
+
+      {/* CREATE GROUP */}
+      {showCreate && (
+        <div className="bg-zinc-900 border border-zinc-800 p-4 rounded space-y-2">
+          <input
+            placeholder="Group name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="w-full bg-black border border-zinc-700 rounded px-2 py-1 text-sm"
+          />
+
+          <textarea
+            placeholder="Description"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            className="w-full bg-black border border-zinc-700 rounded px-2 py-1 text-sm"
+          />
+
+          <label className="text-xs flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={isPrivate}
+              onChange={e => setIsPrivate(e.target.checked)}
+            />
+            Private group
+          </label>
+
+          <button
+            onClick={createGroup}
+            className="bg-green-600 px-3 py-1 rounded text-sm"
+          >
+            Create
+          </button>
+        </div>
+      )}
 
       {/* MY GROUPS */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-gray-300">
-          My Groups
-        </h2>
+        <h2 className="text-sm font-semibold text-gray-300">My Groups</h2>
 
         {myGroups.length === 0 ? (
           <p className="text-xs text-gray-500">
@@ -112,7 +155,12 @@ export default function GroupsPage() {
           </p>
         ) : (
           myGroups.map(group => (
-            <GroupCard key={group._id} group={group} />
+            <GroupCard
+              key={group._id}
+              group={group}
+              myUserId={myUserId}
+              toggleJoin={toggleJoin}
+            />
           ))
         )}
       </section>
@@ -129,10 +177,63 @@ export default function GroupsPage() {
           </p>
         ) : (
           discoverGroups.map(group => (
-            <GroupCard key={group._id} group={group} />
+            <GroupCard
+              key={group._id}
+              group={group}
+              myUserId={myUserId}
+              toggleJoin={toggleJoin}
+            />
           ))
         )}
       </section>
+    </div>
+  );
+}
+
+/* ================= CARD ================= */
+function GroupCard({
+  group,
+  myUserId,
+  toggleJoin,
+}: {
+  group: Group;
+  myUserId: string | null;
+  toggleJoin: (id: string) => void;
+}) {
+  const isOwner = group.owner?._id === myUserId;
+  const isMember = group.members?.includes(myUserId || '');
+
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded p-4 space-y-2">
+      <div className="flex justify-between items-center">
+        <Link
+          href={`/community/groups/${group._id}`}
+          className="font-medium hover:underline"
+        >
+          {group.name}
+        </Link>
+
+        {!isOwner && (
+          <button
+            onClick={() => toggleJoin(group._id)}
+            className={`px-2 py-0.5 rounded text-xs ${
+              isMember
+                ? 'bg-zinc-700'
+                : 'bg-green-600 text-white'
+            }`}
+          >
+            {isMember ? 'Leave' : 'Join'}
+          </button>
+        )}
+      </div>
+
+      <p className="text-xs text-gray-400">
+        {group.description || 'No description'}
+      </p>
+
+      <p className="text-xs text-gray-500">
+        Members: {group.members?.length ?? 0}
+      </p>
     </div>
   );
 }
