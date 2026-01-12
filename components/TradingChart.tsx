@@ -19,22 +19,25 @@ const TIMEFRAMES: Record<string, number> = {
   '60m': 3600,
 };
 
-const STORAGE_KEY = 'tradeky_candles_v1';
-
 type IndicatorMap = Record<string, boolean>;
 
-function loadCandles(): CandlestickData[] | null {
+/* ================= STORAGE HELPERS ================= */
+function storageKey(tf: string) {
+  return `tradeky_candles_${tf}`;
+}
+
+function loadCandles(tf: string): CandlestickData[] | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey(tf));
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
-function saveCandles(candles: CandlestickData[]) {
+function saveCandles(tf: string, candles: CandlestickData[]) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(candles));
+    localStorage.setItem(storageKey(tf), JSON.stringify(candles));
   } catch {}
 }
 
@@ -143,7 +146,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
   /* ================= DATA ================= */
   function initData() {
-    const stored = loadCandles();
+    const stored = loadCandles(tf);
     if (stored && stored.length) {
       candles.current = stored;
       recalcIndicators();
@@ -171,7 +174,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
       t += step;
     }
 
-    saveCandles(candles.current);
+    saveCandles(tf, candles.current);
     recalcIndicators();
   }
 
@@ -184,7 +187,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
     last.low = Math.min(last.low, p);
 
     candleSeriesRef.current.update(last);
-    saveCandles(candles.current);
+    saveCandles(tf, candles.current);
     recalcIndicators();
     onPriceUpdate?.(p);
   }
