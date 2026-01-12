@@ -19,7 +19,24 @@ const TIMEFRAMES: Record<string, number> = {
   '60m': 3600,
 };
 
+const STORAGE_KEY = 'tradeky_candles_v1';
+
 type IndicatorMap = Record<string, boolean>;
+
+function loadCandles(): CandlestickData[] | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCandles(candles: CandlestickData[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(candles));
+  } catch {}
+}
 
 export default function TradingChart({ onPriceUpdate }: any) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -112,7 +129,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
     };
   }, []);
 
-  /* ================= LOAD DATA ON TF ================= */
+  /* ================= LOAD DATA ================= */
   useEffect(() => {
     if (!chartRef.current) return;
 
@@ -126,6 +143,13 @@ export default function TradingChart({ onPriceUpdate }: any) {
 
   /* ================= DATA ================= */
   function initData() {
+    const stored = loadCandles();
+    if (stored && stored.length) {
+      candles.current = stored;
+      recalcIndicators();
+      return;
+    }
+
     candles.current = [];
     volume.current = [];
 
@@ -147,6 +171,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
       t += step;
     }
 
+    saveCandles(candles.current);
     recalcIndicators();
   }
 
@@ -159,6 +184,7 @@ export default function TradingChart({ onPriceUpdate }: any) {
     last.low = Math.min(last.low, p);
 
     candleSeriesRef.current.update(last);
+    saveCandles(candles.current);
     recalcIndicators();
     onPriceUpdate?.(p);
   }
@@ -203,7 +229,6 @@ export default function TradingChart({ onPriceUpdate }: any) {
   /* ================= UI ================= */
   return (
     <div className="relative bg-zinc-900 p-2 rounded border border-zinc-800">
-      {/* TIMEFRAMES */}
       <div className="flex gap-2 mb-2 text-xs">
         {Object.keys(TIMEFRAMES).map(x => (
           <button
@@ -250,18 +275,25 @@ export default function TradingChart({ onPriceUpdate }: any) {
 function calcEMA(c: CandlestickData[], p: number): LineData[] {
   const k = 2 / (p + 1);
   let ema = c[0].close;
-  return c.map(x => ({ time: x.time, value: (ema = x.close * k + ema * (1 - k)) }));
+  return c.map(x => ({
+    time: x.time,
+    value: (ema = x.close * k + ema * (1 - k)),
+  }));
 }
 function calcSMA(c: CandlestickData[], p: number): LineData[] {
   return c.map((x, i) => ({
     time: x.time,
-    value: i < p ? x.close : c.slice(i - p, i).reduce((a, b) => a + b.close, 0) / p,
+    value:
+      i < p
+        ? x.close
+        : c.slice(i - p, i).reduce((a, b) => a + b.close, 0) / p,
   }));
 }
 function calcWMA(c: CandlestickData[], p: number): LineData[] {
   return c.map((x, i) => {
     if (i < p) return { time: x.time, value: x.close };
-    let sum = 0, w = 0;
+    let sum = 0,
+      w = 0;
     for (let j = 0; j < p; j++) {
       sum += c[i - j].close * (p - j);
       w += p - j;
@@ -285,7 +317,8 @@ function calcBB(c: CandlestickData[], p: number) {
   return { upper, lower };
 }
 function calcVWAP(c: CandlestickData[], v: number[]) {
-  let pv = 0, tv = 0;
+  let pv = 0,
+    tv = 0;
   return c.map((x, i) => {
     pv += x.close * v[i];
     tv += v[i];
