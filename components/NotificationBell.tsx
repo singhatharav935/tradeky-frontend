@@ -12,6 +12,10 @@ type Notification = {
   triggerValue?: number;
   createdAt: string;
   from?: { name: string };
+  meta?: {
+    confidence?: number;
+    trendBias?: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
+  };
 };
 
 export default function NotificationBell() {
@@ -80,14 +84,8 @@ export default function NotificationBell() {
     if (!socket) return;
 
     const onNotification = (notification: Notification) => {
-      // increase badge count
       setCount(prev => prev + 1);
-
-      // add notification to top
-      setNotifications(prev => [
-        notification,
-        ...prev,
-      ]);
+      setNotifications(prev => [notification, ...prev]);
     };
 
     socket.on('notification', onNotification);
@@ -96,6 +94,13 @@ export default function NotificationBell() {
       socket.off('notification', onNotification);
     };
   }, [socket]);
+
+  /* ================= HELPERS ================= */
+  const trendColor = (trend?: string) => {
+    if (trend === 'BULLISH') return 'text-green-400';
+    if (trend === 'BEARISH') return 'text-red-400';
+    return 'text-gray-400';
+  };
 
   return (
     <div className="relative">
@@ -117,7 +122,7 @@ export default function NotificationBell() {
 
       {/* DROPDOWN */}
       {open && (
-        <div className="absolute right-0 mt-2 w-80 bg-zinc-900 border border-zinc-800 rounded shadow-lg z-50">
+        <div className="absolute right-0 mt-2 w-96 bg-zinc-900 border border-zinc-800 rounded shadow-lg z-50">
           <div className="flex justify-between items-center px-3 py-2 border-b border-zinc-800">
             <span className="text-sm font-semibold">Notifications</span>
             <button
@@ -142,13 +147,35 @@ export default function NotificationBell() {
                   }`}
                 >
                   {n.type.startsWith('ALERT') ? (
-                    <span>
-                      🚨 {n.type.replace('ALERT_', '')} alert on{' '}
-                      <b>{n.symbol}</b> ({n.timeframe})
-                      {n.triggerValue !== undefined && (
-                        <> @ {n.triggerValue}</>
+                    <div className="space-y-1">
+                      <div>
+                        🚨 <b>{n.type.replace('ALERT_', '')}</b> on{' '}
+                        <b>{n.symbol}</b> ({n.timeframe})
+                        {n.triggerValue !== undefined && (
+                          <> @ {n.triggerValue}</>
+                        )}
+                      </div>
+
+                      {/* 🔥 LAYER 2 INFO */}
+                      {(n.meta?.confidence || n.meta?.trendBias) && (
+                        <div className="flex gap-2 text-[10px]">
+                          {n.meta?.confidence !== undefined && (
+                            <span className="bg-zinc-700 px-2 py-[1px] rounded">
+                              CONF {n.meta.confidence}%
+                            </span>
+                          )}
+                          {n.meta?.trendBias && (
+                            <span
+                              className={`px-2 py-[1px] rounded ${trendColor(
+                                n.meta.trendBias
+                              )}`}
+                            >
+                              {n.meta.trendBias}
+                            </span>
+                          )}
+                        </div>
                       )}
-                    </span>
+                    </div>
                   ) : (
                     <span>
                       🔔 {n.from?.name} {n.type.toLowerCase()}
